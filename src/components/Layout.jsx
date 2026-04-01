@@ -1,5 +1,5 @@
 import { Outlet, NavLink } from 'react-router-dom'
-import { LayoutDashboard, TrendingUp, Settings, RefreshCw, Bug } from 'lucide-react'
+import { LayoutDashboard, TrendingUp, Settings, RefreshCw, Bug, LogOut } from 'lucide-react'
 import { useContext, createContext, useState } from 'react'
 
 export const RefreshContext = createContext(null)
@@ -11,7 +11,7 @@ const NAV = [
   { to: '/debug',   label: 'Debug',         Icon: Bug },
 ]
 
-export default function Layout() {
+export default function Layout({ onLogout }) {
   const [refreshFn, setRefreshFn] = useState(null)
   const [loading, setLoading]     = useState(false)
 
@@ -49,7 +49,7 @@ export default function Layout() {
               </NavLink>
             ))}
           </nav>
-          <div className="p-3 border-t border-gray-700">
+          <div className="p-3 border-t border-gray-700 space-y-1">
             <button
               onClick={handleRefresh}
               disabled={loading}
@@ -57,6 +57,13 @@ export default function Layout() {
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
               Atualizar dados
+            </button>
+            <button
+              onClick={onLogout}
+              className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-sm text-gray-400 hover:bg-gray-800 hover:text-red-400"
+            >
+              <LogOut className="w-4 h-4" />
+              Sair
             </button>
           </div>
         </aside>
