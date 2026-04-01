@@ -212,7 +212,7 @@ export function mergeOfferData(offerRows, metaRows, usdRate, buyersData, metaCur
     byDate[key] = {
       date:              row.date,
       gasto:             row.gasto_brl,  // BRL — será sobrescrito pelo Meta
-      faturamento:       row.fat_brl,    // BRL — será sobrescrito pelos compradores
+      faturamento:       0,              // apenas buyers sheet (31/03+) preenche
       faturamento_front: 0,
       comissao:          0,
       vendas:       row.vendas,
