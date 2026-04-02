@@ -4,7 +4,8 @@ import { useAppConfig } from '../hooks/useAppConfig'
 import { useSheetData } from '../hooks/useSheetData'
 import { calcMetrics, signal } from '../utils/calculations'
 import { fmt } from '../utils/formatters'
-import { getPresetRange, inRange } from '../utils/dateUtils'
+import { getPresetRange, getMesAtualKey, inRange } from '../utils/dateUtils'
+import { useMonthlyGoals } from '../hooks/useMonthlyGoals'
 import { RefreshContext } from '../components/Layout'
 import KPICard from '../components/KPICard'
 import DateFilter from '../components/DateFilter'
@@ -16,6 +17,7 @@ import { Spinner, NoApiKey, ErrorState } from '../components/LoadingState'
 
 export default function Overview() {
   const { settings, apiKey, buyersApiKey, activeOffers } = useAppConfig()
+  const { getGoals } = useMonthlyGoals()
   const { data, loading, error, refresh }               = useSheetData(activeOffers, settings, apiKey, buyersApiKey)
   const { setRefreshFn }                                = useContext(RefreshContext)
   const [range, setRange] = useState(getPresetRange('mes_atual'))
@@ -63,6 +65,8 @@ export default function Overview() {
     return Object.values(data).flat().filter(r => inRange(r.date, monthRange.start, monthRange.end))
   }, [data])
   const monthLucroLiq = monthRows.reduce((s, r) => s + (r.lucro_liquido || 0), 0)
+  const mesKey = getMesAtualKey()
+  const { piso: metaPiso, stretch: metaStretch } = getGoals(mesKey, settings.metaPiso, settings.metaStretch)
 
   if (!apiKey) return <NoApiKey />
   if (loading && !allRows.length) return <Spinner />
@@ -107,7 +111,7 @@ export default function Overview() {
         </div>
       </div>
 
-      <GoalProgressBar current={monthLucroLiq} piso={settings.metaPiso} stretch={settings.metaStretch} />
+      <GoalProgressBar current={monthLucroLiq} piso={metaPiso} stretch={metaStretch} />
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <ProfitLineChart rows={dailyRows} />

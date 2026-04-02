@@ -62,6 +62,14 @@ export function inRange(date, start, end) {
   return date >= start && date <= end
 }
 
+// Retorna a chave "YYYY-MM" do mês comercial atual (dia 3 ao dia 2)
+export function getMesAtualKey() {
+  const today = new Date()
+  let y = today.getFullYear(), m = today.getMonth()
+  if (today.getDate() < 3) { m--; if (m < 0) { m = 11; y-- } }
+  return `${y}-${String(m + 1).padStart(2, '0')}`
+}
+
 export function getPresetRange(preset) {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
@@ -89,9 +97,12 @@ export function getPresetRange(preset) {
     case 'last_30':
       return { start: new Date(today.getTime() - 29 * 86400000), end }
     case 'mes_atual': {
-      // Mês comercial: dia 3 do mês atual até dia 2 do mês seguinte
-      const s = new Date(today.getFullYear(), today.getMonth(), 3)
-      const e = new Date(today.getFullYear(), today.getMonth() + 1, 2)
+      // Mês comercial: dia 3 ao dia 2 do mês seguinte
+      // Se hoje é dia 1 ou 2, ainda estamos no mês comercial anterior
+      let y = today.getFullYear(), m = today.getMonth()
+      if (today.getDate() < 3) { m--; if (m < 0) { m = 11; y-- } }
+      const s = new Date(y, m, 3)
+      const e = new Date(y, m + 1, 2)
       return { start: s, end: endOfDay(e) }
     }
     default:

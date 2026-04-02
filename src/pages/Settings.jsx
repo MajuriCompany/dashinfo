@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { Plus, Edit2, Trash2, PauseCircle, PlayCircle, AlertTriangle, Save, RefreshCw } from 'lucide-react'
 import { useAppConfig } from '../hooks/useAppConfig'
+import { useMonthlyGoals } from '../hooks/useMonthlyGoals'
+import { getMesAtualKey } from '../utils/dateUtils'
 import { fetchAllBuyersProducts } from '../services/sheetsService'
 import DiagnosticPanel from '../components/DiagnosticPanel'
 
@@ -27,6 +29,18 @@ export default function Settings() {
   const [unmapped,         setUnmapped]         = useState([])
   const [buyersProducts,   setBuyersProducts]   = useState([])
   const [loadingBuyers,    setLoadingBuyers]    = useState(false)
+
+  const { goals, setGoals, removeGoals } = useMonthlyGoals()
+  const [goalMonth,  setGoalMonth]  = useState(getMesAtualKey)
+  const [goalPiso,   setGoalPiso]   = useState('')
+  const [goalStretch, setGoalStretch] = useState('')
+
+  // Populate form when month changes
+  useEffect(() => {
+    const g = goals[goalMonth]
+    setGoalPiso(g?.piso   != null ? String(g.piso)    : '')
+    setGoalStretch(g?.stretch != null ? String(g.stretch) : '')
+  }, [goalMonth, goals])
 
   async function checkBuyersProducts(key) {
     if (!key) return
@@ -122,6 +136,86 @@ export default function Settings() {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* Metas por Mês */}
+      <div className="bg-white rounded-lg shadow-sm p-5 space-y-4">
+        <h3 className="font-semibold text-gray-700">Metas por Mês</h3>
+        <p className="text-xs text-gray-400 -mt-2">
+          Defina Meta Piso e Meta Real independente para cada mês comercial (dia 3 ao dia 2).
+          Se não houver meta salva para um mês, os valores padrão acima são usados.
+        </p>
+
+        {/* Month picker + inputs */}
+        <div className="grid grid-cols-3 gap-3 items-end">
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">Mês (AAAA-MM)</label>
+            <input
+              type="month"
+              className="border rounded px-3 py-1.5 text-sm w-full"
+              value={goalMonth}
+              onChange={e => setGoalMonth(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">Meta Piso (R$)</label>
+            <input
+              type="number" step="100"
+              className="border rounded px-3 py-1.5 text-sm w-full"
+              placeholder="ex: 8000"
+              value={goalPiso}
+              onChange={e => setGoalPiso(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">Meta Real (R$)</label>
+            <input
+              type="number" step="100"
+              className="border rounded px-3 py-1.5 text-sm w-full"
+              placeholder="ex: 12000"
+              value={goalStretch}
+              onChange={e => setGoalStretch(e.target.value)}
+            />
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => {
+              if (goalPiso || goalStretch) setGoals(goalMonth, Number(goalPiso) || 0, Number(goalStretch) || 0)
+            }}
+            className="px-4 py-1.5 bg-blue-600 text-white rounded text-xs font-medium hover:bg-blue-700"
+          >
+            Salvar meta do mês
+          </button>
+          {goals[goalMonth] && (
+            <button
+              onClick={() => removeGoals(goalMonth)}
+              className="px-4 py-1.5 bg-red-50 text-red-600 border border-red-200 rounded text-xs font-medium hover:bg-red-100"
+            >
+              Remover
+            </button>
+          )}
+        </div>
+
+        {/* List of saved goals */}
+        {Object.keys(goals).length > 0 && (
+          <div className="mt-2 border rounded-lg divide-y">
+            {Object.entries(goals)
+              .sort(([a], [b]) => b.localeCompare(a))
+              .map(([month, g]) => (
+                <div
+                  key={month}
+                  className={`flex items-center justify-between px-3 py-2 text-xs cursor-pointer hover:bg-gray-50 ${month === goalMonth ? 'bg-blue-50' : ''}`}
+                  onClick={() => setGoalMonth(month)}
+                >
+                  <span className="font-medium text-gray-700">{month}</span>
+                  <span className="text-gray-500">
+                    Piso: R$ {g.piso?.toLocaleString('pt-BR')} · Real: R$ {g.stretch?.toLocaleString('pt-BR')}
+                  </span>
+                </div>
+              ))}
+          </div>
+        )}
       </div>
 
       {/* API Keys */}
