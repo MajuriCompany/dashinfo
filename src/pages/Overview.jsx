@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext, useMemo, useRef } from 'react'
+import { useState, useEffect, useContext, useMemo } from 'react'
 import { DollarSign, TrendingUp, ShoppingCart, Percent } from 'lucide-react'
 import { useAppConfig } from '../hooks/useAppConfig'
 import { useSheetData } from '../hooks/useSheetData'
@@ -15,6 +15,14 @@ import ProfitLineChart from '../components/charts/ProfitLineChart'
 import OfferBarChart from '../components/charts/OfferBarChart'
 import OfferPieChart from '../components/charts/OfferPieChart'
 import { Spinner, NoApiKey, ErrorState } from '../components/LoadingState'
+
+const signalText = c =>
+  c === 'green' ? 'text-emerald-600' : c === 'yellow' ? 'text-amber-600' : c === 'red' ? 'text-red-500' : 'text-gray-800'
+
+const roiClass = roi =>
+  roi >= 2 ? 'text-success bg-success-light border-success' :
+  roi >= 1 ? 'text-warning bg-warning-light border-warning' :
+             'text-danger bg-danger-light border-danger'
 
 export default function Overview() {
   const { settings, apiKey, buyersApiKey, activeOffers } = useAppConfig()
@@ -42,24 +50,19 @@ export default function Overview() {
     return result
   }, [data, activeOffers, range])
 
-  const allRows = useMemo(() =>
-    Object.values(filteredData).flat(),
-    [filteredData]
-  )
-
+  const allRows = useMemo(() => Object.values(filteredData).flat(), [filteredData])
   const metrics = useMemo(() => calcMetrics(allRows, settings.aliquota), [allRows, settings.aliquota])
 
-  // Aggregate daily rows across all offers
   const dailyRows = useMemo(() => {
     const byDate = {}
     activeOffers.forEach(offer => {
-      (filteredData[offer.id] || []).forEach(r => {
+      ;(filteredData[offer.id] || []).forEach(r => {
         const key = r.date.toISOString().split('T')[0]
         if (!byDate[key]) byDate[key] = { date: r.date, faturamento: 0, comissao: 0, gasto: 0, lucro_bruto: 0, lucro_liquido: 0, offerLucros: {} }
-        byDate[key].faturamento   += r.faturamento  || 0
-        byDate[key].comissao      += r.comissao     || 0
-        byDate[key].gasto         += r.gasto        || 0
-        byDate[key].lucro_bruto   += r.lucro_bruto  || 0
+        byDate[key].faturamento   += r.faturamento   || 0
+        byDate[key].comissao      += r.comissao      || 0
+        byDate[key].gasto         += r.gasto         || 0
+        byDate[key].lucro_bruto   += r.lucro_bruto   || 0
         byDate[key].lucro_liquido += r.lucro_liquido || 0
         byDate[key].offerLucros[offer.id] = (byDate[key].offerLucros[offer.id] || 0) + (r.lucro_bruto || 0)
       })
@@ -69,7 +72,6 @@ export default function Overview() {
       .map(r => ({ ...r, roi: r.gasto > 0 ? r.faturamento / r.gasto : null }))
   }, [filteredData, activeOffers])
 
-  // Month progress for goals
   const monthRows = useMemo(() => {
     const monthRange = getPresetRange('mes_atual')
     return Object.values(data).flat().filter(r => inRange(r.date, monthRange.start, monthRange.end))
@@ -82,123 +84,180 @@ export default function Overview() {
   if (loading && !allRows.length) return <Spinner />
   if (error) return <ErrorState message={error} />
 
+  const effectiveRate = todayRate ?? settings.usdRate
+  const rateChanged   = todayRate && Math.abs(todayRate - settings.usdRate) > 0.01
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
+
+      {/* ── Header ── */}
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold text-gray-800">Visão Geral</h2>
-        <div className="text-xs text-gray-500 bg-white border rounded px-2 py-1" title="Cotação automática do dia anterior (AwesomeAPI)">
-          USD R$ {(todayRate ?? settings.usdRate).toFixed(2)}
-          {todayRate && Math.abs(todayRate - settings.usdRate) > 0.01 && (
-            <span className="ml-1 text-blue-500">(auto)</span>
+        <div>
+          <h2 className="text-xl font-bold text-gray-900">Visão Geral</h2>
+          <p className="text-xs text-gray-400 mt-0.5">Resultado consolidado · todas as ofertas</p>
+        </div>
+        <div
+          className="flex items-center gap-1.5 text-xs bg-white border border-gray-200 rounded-lg px-3 py-1.5 shadow-sm"
+          title="Cotação automática do fechamento anterior (AwesomeAPI)"
+        >
+          <span className="text-gray-400">USD</span>
+          <span className="font-bold text-gray-700">R$ {effectiveRate.toFixed(2)}</span>
+          {rateChanged && (
+            <span className="bg-blue-100 text-blue-600 text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase">auto</span>
           )}
         </div>
       </div>
 
+      {/* ── Filtro de período ── */}
       <DateFilter onChange={setRange} />
 
-      {/* KPI Cards — resultado principal */}
-      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-3">
-        <KPICard label="Fat. Bruto"  value={fmt.brl(metrics.faturamento)}   icon={DollarSign} />
-        <KPICard label="Comissão"    value={fmt.brl(metrics.comissao)}       icon={DollarSign} />
-        <KPICard label="Gasto"       value={fmt.brl(metrics.gasto)}          icon={ShoppingCart} />
-        <KPICard label="Lucro Bruto" value={fmt.brl(metrics.lucro_bruto)}   color={signal('lucro_bruto', metrics.lucro_bruto)}   icon={TrendingUp} />
-        <KPICard label="Lucro Líq."  value={fmt.brl(metrics.lucro_liquido)} color={signal('lucro_liquido', metrics.lucro_liquido)} icon={TrendingUp} />
-        <KPICard label="ROI"         value={fmt.roi(metrics.roi)}           color={signal('roi', metrics.roi)} />
+      {/* ── KPIs: inputs (compactos) ── */}
+      <div className="grid grid-cols-3 gap-3">
+        <KPICard label="Fat. Bruto" value={fmt.brl(metrics.faturamento)} icon={DollarSign} />
+        <KPICard label="Comissão"   value={fmt.brl(metrics.comissao)}    icon={DollarSign} />
+        <KPICard label="Gasto"      value={fmt.brl(metrics.gasto)}       icon={ShoppingCart} />
       </div>
 
-      {/* Margens agrupadas por base de cálculo */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-          <p className="text-xs font-bold text-blue-600 uppercase tracking-wide mb-2">Base: Faturamento Bruto</p>
-          <div className="grid grid-cols-2 gap-2">
-            <KPICard label="Mg Bruta"    value={fmt.pct((metrics.margem_bruta || 0) * 100)} color={signal('margem_bruta', metrics.margem_bruta)} icon={Percent} />
-            <KPICard label="Mg Líquida"  value={fmt.pct((metrics.margem_liq   || 0) * 100)} color={signal('margem_liq',   metrics.margem_liq)}   icon={Percent} />
+      {/* ── KPIs: resultado (hero) ── */}
+      <div className="grid grid-cols-3 gap-3">
+        <KPICard label="Lucro Bruto" value={fmt.brl(metrics.lucro_bruto)}   color={signal('lucro_bruto',   metrics.lucro_bruto)}   icon={TrendingUp} variant="hero" />
+        <KPICard label="Lucro Líq."  value={fmt.brl(metrics.lucro_liquido)} color={signal('lucro_liquido', metrics.lucro_liquido)} icon={TrendingUp} variant="hero" />
+        <KPICard label="ROI"         value={fmt.roi(metrics.roi)}           color={signal('roi', metrics.roi)} variant="hero" />
+      </div>
+
+      {/* ── Margens ── */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+        <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-4">Margens</p>
+        <div className="grid grid-cols-2 gap-6 divide-x divide-gray-100">
+          {/* Base: Faturamento Bruto */}
+          <div>
+            <p className="text-[11px] font-semibold text-blue-500 uppercase tracking-wide mb-3">Base Faturamento</p>
+            <div className="flex gap-8">
+              <div>
+                <p className="text-[11px] text-gray-400 mb-0.5">Margem Bruta</p>
+                <p className={`text-2xl font-bold ${signalText(signal('margem_bruta', metrics.margem_bruta))}`}>
+                  {fmt.pct((metrics.margem_bruta || 0) * 100)}
+                </p>
+              </div>
+              <div>
+                <p className="text-[11px] text-gray-400 mb-0.5">Margem Líquida</p>
+                <p className={`text-2xl font-bold ${signalText(signal('margem_liq', metrics.margem_liq))}`}>
+                  {fmt.pct((metrics.margem_liq || 0) * 100)}
+                </p>
+              </div>
+            </div>
           </div>
-        </div>
-        <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
-          <p className="text-xs font-bold text-purple-600 uppercase tracking-wide mb-2">Base: Comissão</p>
-          <div className="grid grid-cols-2 gap-2">
-            <KPICard label="Mg Bruta"   value={fmt.pct((metrics.margem_bruta_comissao || 0) * 100)} color={signal('margem_bruta_comissao', metrics.margem_bruta_comissao)} icon={Percent} />
-            <KPICard label="Mg Líquida" value={fmt.pct((metrics.margem_liq_comissao   || 0) * 100)} color={signal('margem_liq_comissao',   metrics.margem_liq_comissao)}   icon={Percent} />
+
+          {/* Base: Comissão */}
+          <div className="pl-6">
+            <p className="text-[11px] font-semibold text-purple-500 uppercase tracking-wide mb-3">Base Comissão</p>
+            <div className="flex gap-8">
+              <div>
+                <p className="text-[11px] text-gray-400 mb-0.5">Margem Bruta</p>
+                <p className={`text-2xl font-bold ${signalText(signal('margem_bruta_comissao', metrics.margem_bruta_comissao))}`}>
+                  {fmt.pct((metrics.margem_bruta_comissao || 0) * 100)}
+                </p>
+              </div>
+              <div>
+                <p className="text-[11px] text-gray-400 mb-0.5">Margem Líquida</p>
+                <p className={`text-2xl font-bold ${signalText(signal('margem_liq_comissao', metrics.margem_liq_comissao))}`}>
+                  {fmt.pct((metrics.margem_liq_comissao || 0) * 100)}
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
+      {/* ── Progresso da Meta ── */}
       <GoalProgressBar current={monthLucroLiq} piso={metaPiso} stretch={metaStretch} />
 
+      {/* ── Gráficos ── */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <ProfitLineChart rows={dailyRows} />
         <OfferBarChart   offersData={filteredData} offers={activeOffers} />
         <OfferPieChart   offersData={filteredData} offers={activeOffers} />
       </div>
 
-      {/* Daily Table */}
-      <div className="bg-white rounded-lg shadow-sm overflow-x-auto">
-        <table className="w-full text-xs">
-          <thead className="bg-gray-50 border-b">
-            <tr>
-              <th className="text-left px-3 py-2 text-gray-500">Data</th>
-              {activeOffers.map(o => (
-                <th key={o.id} className="text-right px-3 py-2 text-gray-500 min-w-[100px]">{o.name.split('(')[0].trim()}</th>
-              ))}
-              <th className="text-right px-3 py-2 text-gray-500 min-w-[90px]">Fat. Bruto</th>
-              <th className="text-right px-3 py-2 text-gray-500 min-w-[90px]">Comissão</th>
-              <th className="text-right px-3 py-2 text-gray-500 min-w-[80px]">Gasto</th>
-              <th className="text-right px-3 py-2 text-gray-500 min-w-[90px]">Lucro Bruto</th>
-              <th className="text-right px-3 py-2 text-gray-500 min-w-[90px]">Lucro Líq.</th>
-              <th className="text-right px-3 py-2 text-gray-500 min-w-[60px]">ROI</th>
-            </tr>
-          </thead>
-          <tbody>
-            {dailyRows.map((row, i) => (
-              <tr
-                key={i}
-                className={`border-b hover:bg-gray-50 ${row.lucro_bruto < 0 ? 'bg-red-50' : ''}`}
-              >
-                <td className="px-3 py-2 text-gray-600">{fmt.date(row.date)}</td>
+      {/* ── Detalhe Diário ── */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-700">Detalhe Diário</h3>
+            <p className="text-xs text-gray-400">{dailyRows.length} {dailyRows.length === 1 ? 'dia' : 'dias'} no período</p>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead className="bg-gray-50 border-b border-gray-100">
+              <tr>
+                <th className="text-left px-4 py-2.5 text-gray-400 font-medium">Data</th>
                 {activeOffers.map(o => (
-                  <td key={o.id} className="px-3 py-2 text-right text-gray-700">
-                    {fmt.brl(row.offerLucros?.[o.id] || 0)}
-                  </td>
+                  <th key={o.id} className="text-right px-3 py-2.5 text-gray-400 font-medium min-w-[100px]">
+                    <span className="inline-flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: o.color }} />
+                      {o.name.split('(')[0].trim()}
+                    </span>
+                  </th>
                 ))}
-                <td className="px-3 py-2 text-right text-gray-700">{fmt.brl(row.faturamento)}</td>
-                <td className="px-3 py-2 text-right text-gray-700">{fmt.brl(row.comissao)}</td>
-                <td className="px-3 py-2 text-right text-gray-700">{fmt.brl(row.gasto)}</td>
-                <td className={`px-3 py-2 text-right font-medium ${row.lucro_bruto >= 0 ? 'text-success' : 'text-danger'}`}>
-                  {fmt.brl(row.lucro_bruto)}
-                </td>
-                <td className={`px-3 py-2 text-right font-medium ${row.lucro_liquido >= 0 ? 'text-success' : 'text-danger'}`}>
-                  {fmt.brl(row.lucro_liquido)}
-                </td>
-                <td className="px-3 py-2 text-right">
-                  <span className={`px-1.5 py-0.5 rounded text-xs font-medium border ${
-                    row.roi >= 2 ? 'text-success bg-success-light border-success' :
-                    row.roi >= 1 ? 'text-warning bg-warning-light border-warning' :
-                    'text-danger bg-danger-light border-danger'
-                  }`}>
-                    {fmt.roi(row.roi)}
-                  </span>
-                </td>
+                <th className="text-right px-3 py-2.5 text-gray-400 font-medium min-w-[90px]">Fat. Bruto</th>
+                <th className="text-right px-3 py-2.5 text-gray-400 font-medium min-w-[90px]">Comissão</th>
+                <th className="text-right px-3 py-2.5 text-gray-400 font-medium min-w-[80px]">Gasto</th>
+                <th className="text-right px-3 py-2.5 text-gray-400 font-medium min-w-[90px]">Lucro Bruto</th>
+                <th className="text-right px-3 py-2.5 text-gray-400 font-medium min-w-[90px]">Lucro Líq.</th>
+                <th className="text-right px-3 py-2.5 text-gray-400 font-medium min-w-[60px]">ROI</th>
               </tr>
-            ))}
-          </tbody>
-          <tfoot className="bg-gray-100 font-semibold border-t">
-            <tr>
-              <td className="px-3 py-2 text-gray-700">Total</td>
-              {activeOffers.map(o => {
-                const total = (filteredData[o.id] || []).reduce((s, r) => s + (r.lucro_bruto || 0), 0)
-                return <td key={o.id} className="px-3 py-2 text-right text-gray-700">{fmt.brl(total)}</td>
-              })}
-              <td className="px-3 py-2 text-right text-gray-700">{fmt.brl(metrics.faturamento)}</td>
-              <td className="px-3 py-2 text-right text-gray-700">{fmt.brl(metrics.comissao)}</td>
-              <td className="px-3 py-2 text-right text-gray-700">{fmt.brl(metrics.gasto)}</td>
-              <td className="px-3 py-2 text-right text-success">{fmt.brl(metrics.lucro_bruto)}</td>
-              <td className="px-3 py-2 text-right text-success">{fmt.brl(metrics.lucro_liquido)}</td>
-              <td className="px-3 py-2 text-right">{fmt.roi(metrics.roi)}</td>
-            </tr>
-          </tfoot>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {dailyRows.map((row, i) => (
+                <tr key={i} className={`hover:bg-gray-50/80 transition-colors ${row.lucro_bruto < 0 ? 'bg-red-50/50' : ''}`}>
+                  <td className="px-4 py-2.5 text-gray-600 font-medium">{fmt.date(row.date)}</td>
+                  {activeOffers.map(o => (
+                    <td key={o.id} className="px-3 py-2.5 text-right text-gray-600">
+                      {fmt.brl(row.offerLucros?.[o.id] || 0)}
+                    </td>
+                  ))}
+                  <td className="px-3 py-2.5 text-right text-gray-600">{fmt.brl(row.faturamento)}</td>
+                  <td className="px-3 py-2.5 text-right text-gray-600">{fmt.brl(row.comissao)}</td>
+                  <td className="px-3 py-2.5 text-right text-gray-600">{fmt.brl(row.gasto)}</td>
+                  <td className={`px-3 py-2.5 text-right font-semibold ${row.lucro_bruto >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                    {fmt.brl(row.lucro_bruto)}
+                  </td>
+                  <td className={`px-3 py-2.5 text-right font-semibold ${row.lucro_liquido >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                    {fmt.brl(row.lucro_liquido)}
+                  </td>
+                  <td className="px-3 py-2.5 text-right">
+                    <span className={`px-2 py-0.5 rounded-md text-[11px] font-semibold border ${roiClass(row.roi)}`}>
+                      {fmt.roi(row.roi)}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot className="bg-gray-50 border-t-2 border-gray-200 font-semibold">
+              <tr>
+                <td className="px-4 py-3 text-gray-700">Total</td>
+                {activeOffers.map(o => {
+                  const total = (filteredData[o.id] || []).reduce((s, r) => s + (r.lucro_bruto || 0), 0)
+                  return <td key={o.id} className="px-3 py-3 text-right text-gray-700">{fmt.brl(total)}</td>
+                })}
+                <td className="px-3 py-3 text-right text-gray-700">{fmt.brl(metrics.faturamento)}</td>
+                <td className="px-3 py-3 text-right text-gray-700">{fmt.brl(metrics.comissao)}</td>
+                <td className="px-3 py-3 text-right text-gray-700">{fmt.brl(metrics.gasto)}</td>
+                <td className={`px-3 py-3 text-right ${metrics.lucro_bruto >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                  {fmt.brl(metrics.lucro_bruto)}
+                </td>
+                <td className={`px-3 py-3 text-right ${metrics.lucro_liquido >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                  {fmt.brl(metrics.lucro_liquido)}
+                </td>
+                <td className="px-3 py-3 text-right text-gray-700">{fmt.roi(metrics.roi)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
       </div>
+
     </div>
   )
 }
