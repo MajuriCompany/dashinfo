@@ -16,9 +16,6 @@ import OfferBarChart from '../components/charts/OfferBarChart'
 import OfferPieChart from '../components/charts/OfferPieChart'
 import { Spinner, NoApiKey, ErrorState } from '../components/LoadingState'
 
-const signalText = c =>
-  c === 'green' ? 'text-emerald-600' : c === 'yellow' ? 'text-amber-600' : c === 'red' ? 'text-red-500' : 'text-gray-800'
-
 const roiClass = roi =>
   roi >= 2 ? 'text-success bg-success-light border-success' :
   roi >= 1 ? 'text-warning bg-warning-light border-warning' :
@@ -126,45 +123,19 @@ export default function Overview() {
       </div>
 
       {/* ── Margens ── */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-        <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-4">Margens</p>
-        <div className="grid grid-cols-2 gap-6 divide-x divide-gray-100">
-          {/* Base: Faturamento Bruto */}
-          <div>
-            <p className="text-[11px] font-semibold text-blue-500 uppercase tracking-wide mb-3">Base Faturamento</p>
-            <div className="flex gap-8">
-              <div>
-                <p className="text-[11px] text-gray-400 mb-0.5">Margem Bruta</p>
-                <p className={`text-2xl font-bold ${signalText(signal('margem_bruta', metrics.margem_bruta))}`}>
-                  {fmt.pct((metrics.margem_bruta || 0) * 100)}
-                </p>
-              </div>
-              <div>
-                <p className="text-[11px] text-gray-400 mb-0.5">Margem Líquida</p>
-                <p className={`text-2xl font-bold ${signalText(signal('margem_liq', metrics.margem_liq))}`}>
-                  {fmt.pct((metrics.margem_liq || 0) * 100)}
-                </p>
-              </div>
-            </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-2">
+          <p className="text-[10px] font-bold text-blue-500 uppercase tracking-widest mb-2">Base: Faturamento Bruto</p>
+          <div className="grid grid-cols-2 gap-2">
+            <KPICard label="Mg Bruta"   value={fmt.pct((metrics.margem_bruta || 0) * 100)} color={signal('margem_bruta', metrics.margem_bruta)} icon={Percent} />
+            <KPICard label="Mg Líquida" value={fmt.pct((metrics.margem_liq   || 0) * 100)} color={signal('margem_liq',   metrics.margem_liq)}   icon={Percent} />
           </div>
-
-          {/* Base: Comissão */}
-          <div className="pl-6">
-            <p className="text-[11px] font-semibold text-purple-500 uppercase tracking-wide mb-3">Base Comissão</p>
-            <div className="flex gap-8">
-              <div>
-                <p className="text-[11px] text-gray-400 mb-0.5">Margem Bruta</p>
-                <p className={`text-2xl font-bold ${signalText(signal('margem_bruta_comissao', metrics.margem_bruta_comissao))}`}>
-                  {fmt.pct((metrics.margem_bruta_comissao || 0) * 100)}
-                </p>
-              </div>
-              <div>
-                <p className="text-[11px] text-gray-400 mb-0.5">Margem Líquida</p>
-                <p className={`text-2xl font-bold ${signalText(signal('margem_liq_comissao', metrics.margem_liq_comissao))}`}>
-                  {fmt.pct((metrics.margem_liq_comissao || 0) * 100)}
-                </p>
-              </div>
-            </div>
+        </div>
+        <div className="bg-purple-50 border border-purple-100 rounded-lg px-4 py-2">
+          <p className="text-[10px] font-bold text-purple-500 uppercase tracking-widest mb-2">Base: Comissão</p>
+          <div className="grid grid-cols-2 gap-2">
+            <KPICard label="Mg Bruta"   value={fmt.pct((metrics.margem_bruta_comissao || 0) * 100)} color={signal('margem_bruta_comissao', metrics.margem_bruta_comissao)} icon={Percent} />
+            <KPICard label="Mg Líquida" value={fmt.pct((metrics.margem_liq_comissao   || 0) * 100)} color={signal('margem_liq_comissao',   metrics.margem_liq_comissao)}   icon={Percent} />
           </div>
         </div>
       </div>
