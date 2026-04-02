@@ -161,6 +161,7 @@ export async function fetchBuyersDataByOffer(buyersApiKey, offers) {
   console.log('[COMPRADORES] produtos mapeados:', Object.keys(productMap))
 
   const byOffer  = {}
+  const rawRows  = {}   // { [offerId]: [{ date, product, comissao, faturamento, isFront }] }
   const notFound = new Set()
 
   for (let i = 1; i < rows.length; i++) {
@@ -170,7 +171,6 @@ export async function fetchBuyersDataByOffer(buyersApiKey, offers) {
     const date = parseDate(row[iDate])
     if (!date || isNaN(date.getTime())) continue
 
-    // Ignora vendas anteriores ao corte
     if (date < BUYERS_CUTOFF) continue
 
     const prodName = String(row[iProd] || '').trim()
@@ -178,26 +178,31 @@ export async function fetchBuyersDataByOffer(buyersApiKey, offers) {
     if (!match) { notFound.add(prodName); continue }
 
     const { offerId, isFront } = match
-    const dateKey = date.toISOString().split('T')[0]
-    const valor   = parseNum(String(row[iVal] || '0'))
+    const dateKey       = date.toISOString().split('T')[0]
+    const valor         = parseNum(String(row[iVal]      || '0'))
+    const comissaoValor = parseNum(String(row[iComissao] || '0'))
 
+    // Agregação por data (existente)
     if (!byOffer[offerId]) byOffer[offerId] = {}
     if (!byOffer[offerId][dateKey]) {
       byOffer[offerId][dateKey] = { faturamento: 0, faturamento_front: 0, comissao: 0, vendas: 0, vendas_front: 0 }
     }
-    const comissaoValor = parseNum(String(row[iComissao] || '0'))
     byOffer[offerId][dateKey].faturamento  += valor
     byOffer[offerId][dateKey].comissao     += comissaoValor
     byOffer[offerId][dateKey].vendas       += 1
     if (isFront) {
-      byOffer[offerId][dateKey].vendas_front    += 1
+      byOffer[offerId][dateKey].vendas_front      += 1
       byOffer[offerId][dateKey].faturamento_front += valor
     }
+
+    // Linha bruta por produto (nova)
+    if (!rawRows[offerId]) rawRows[offerId] = []
+    rawRows[offerId].push({ date, product: prodName, comissao: comissaoValor, faturamento: valor, isFront })
   }
 
   if (notFound.size) console.warn('[COMPRADORES] ⚠️ Produtos sem vínculo:', [...notFound])
   console.log('[COMPRADORES] ✅ Ofertas com dados:', Object.keys(byOffer))
-  return byOffer
+  return { byOffer, rawRows }
 }
 
 // ---------------------------------------------------------------------------
@@ -287,9 +292,12 @@ export async function fetchOfferData(offer, apiKey, getRateForDate, buyersDataBy
 // ---------------------------------------------------------------------------
 export async function fetchAllOffersData(offers, apiKey, getRateForDate, buyersApiKey = '') {
   let buyersDataByOffer = {}
+  let productRows = {}
   if (buyersApiKey) {
     try {
-      buyersDataByOffer = await fetchBuyersDataByOffer(buyersApiKey, offers)
+      const result = await fetchBuyersDataByOffer(buyersApiKey, offers)
+      buyersDataByOffer = result.byOffer
+      productRows       = result.rawRows
     } catch (e) {
       console.warn('[COMPRADORES] Erro:', e.message)
     }
@@ -304,7 +312,7 @@ export async function fetchAllOffersData(offers, apiKey, getRateForDate, buyersA
     data[offers[i].id] = r.status === 'fulfilled' ? r.value : []
     if (r.status === 'rejected') console.error(`[FETCH] ${offers[i].name}:`, r.reason)
   })
-  return data
+  return { data, productRows }
 }
 
 // ---------------------------------------------------------------------------
