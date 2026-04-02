@@ -5,10 +5,9 @@ import { fmt } from '../../utils/formatters'
 
 export default function ProfitLineChart({ rows }) {
   const data = rows.map(r => ({
-    date:           fmt.date(r.date),
-    Faturamento:    r.faturamento    || 0,
-    'Lucro Bruto':  r.lucro_bruto   || 0,
-    'Lucro Líquido': r.lucro_liquido || 0,
+    date:            fmt.date(r.date),
+    Faturamento:     r.faturamento    || 0,
+    'Lucro Líquido': r.lucro_liquido  || 0,
   }))
 
   return (
@@ -22,8 +21,7 @@ export default function ProfitLineChart({ rows }) {
           <Tooltip formatter={(v) => fmt.brl(v)} />
           <Legend />
           <Line type="monotone" dataKey="Faturamento"    stroke="#2563eb" dot={false} strokeWidth={2} />
-          <Line type="monotone" dataKey="Lucro Bruto"   stroke="#16a34a" dot={false} strokeWidth={2} />
-          <Line type="monotone" dataKey="Lucro Líquido" stroke="#9333ea" dot={false} strokeWidth={2} strokeDasharray="5 5" />
+          <Line type="monotone" dataKey="Lucro Líquido"  stroke="#9333ea" dot={false} strokeWidth={2} strokeDasharray="5 5" />
         </LineChart>
       </ResponsiveContainer>
     </div>

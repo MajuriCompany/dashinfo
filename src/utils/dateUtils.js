@@ -88,6 +88,12 @@ export function getPresetRange(preset) {
       return { start: new Date(today.getTime() - 6 * 86400000), end }
     case 'last_30':
       return { start: new Date(today.getTime() - 29 * 86400000), end }
+    case 'mes_atual': {
+      // Mês comercial: dia 3 do mês atual até dia 2 do mês seguinte
+      const s = new Date(today.getFullYear(), today.getMonth(), 3)
+      const e = new Date(today.getFullYear(), today.getMonth() + 1, 2)
+      return { start: s, end: endOfDay(e) }
+    }
     default:
       return { start: new Date(today.getFullYear(), today.getMonth(), 1), end }
   }

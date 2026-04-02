@@ -6,7 +6,7 @@ export default function GoalProgressBar({ current, piso, stretch }) {
 
   return (
     <div className="bg-white rounded-lg shadow-sm p-4">
-      <h3 className="text-sm font-semibold text-gray-700 mb-3">Progresso das Metas (Lucro Bruto)</h3>
+      <h3 className="text-sm font-semibold text-gray-700 mb-3">Progresso das Metas — Mês atual (Lucro Líquido)</h3>
       <div className="space-y-3">
         <div>
           <div className="flex justify-between text-xs text-gray-500 mb-1">
@@ -23,7 +23,7 @@ export default function GoalProgressBar({ current, piso, stretch }) {
         </div>
         <div>
           <div className="flex justify-between text-xs text-gray-500 mb-1">
-            <span>Meta Stretch — {fmt.brl(stretch)}</span>
+            <span>Meta Real — {fmt.brl(stretch)}</span>
             <span>{stretchPct.toFixed(1)}%</span>
           </div>
           <div className="h-3 bg-gray-100 rounded-full overflow-hidden">

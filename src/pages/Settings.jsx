@@ -105,7 +105,7 @@ export default function Settings() {
             { key: 'aliquota',    label: 'Alíquota de Imposto (%)', step: '0.1',
               display: v => (v * 100).toFixed(1), parse: v => parseFloat(v) / 100 },
             { key: 'metaPiso',    label: 'Meta Piso (R$)',          step: '100' },
-            { key: 'metaStretch', label: 'Meta Stretch (R$)',       step: '100' },
+            { key: 'metaStretch', label: 'Meta Real (R$)',           step: '100' },
           ].map(({ key, label, step, display, parse }) => (
             <div key={key}>
               <label className="text-xs text-gray-500 block mb-1">{label}</label>

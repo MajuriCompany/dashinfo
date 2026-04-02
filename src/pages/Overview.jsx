@@ -11,13 +11,14 @@ import DateFilter from '../components/DateFilter'
 import GoalProgressBar from '../components/ProgressBar'
 import ProfitLineChart from '../components/charts/ProfitLineChart'
 import OfferBarChart from '../components/charts/OfferBarChart'
+import OfferPieChart from '../components/charts/OfferPieChart'
 import { Spinner, NoApiKey, ErrorState } from '../components/LoadingState'
 
 export default function Overview() {
   const { settings, apiKey, buyersApiKey, activeOffers } = useAppConfig()
   const { data, loading, error, refresh }               = useSheetData(activeOffers, settings, apiKey, buyersApiKey)
   const { setRefreshFn }                                = useContext(RefreshContext)
-  const [range, setRange] = useState(getPresetRange('last_30'))
+  const [range, setRange] = useState(getPresetRange('mes_atual'))
 
   useEffect(() => { setRefreshFn(() => refresh) }, [refresh, setRefreshFn])
 
@@ -58,10 +59,10 @@ export default function Overview() {
 
   // Month progress for goals
   const monthRows = useMemo(() => {
-    const monthRange = getPresetRange('this_month')
+    const monthRange = getPresetRange('mes_atual')
     return Object.values(data).flat().filter(r => inRange(r.date, monthRange.start, monthRange.end))
   }, [data])
-  const monthLucroBruto = monthRows.reduce((s, r) => s + (r.lucro_bruto || 0), 0)
+  const monthLucroLiq = monthRows.reduce((s, r) => s + (r.lucro_liquido || 0), 0)
 
   if (!apiKey) return <NoApiKey />
   if (loading && !allRows.length) return <Spinner />
@@ -106,11 +107,12 @@ export default function Overview() {
         </div>
       </div>
 
-      <GoalProgressBar current={monthLucroBruto} piso={settings.metaPiso} stretch={settings.metaStretch} />
+      <GoalProgressBar current={monthLucroLiq} piso={settings.metaPiso} stretch={settings.metaStretch} />
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <ProfitLineChart rows={dailyRows} />
         <OfferBarChart   offersData={filteredData} offers={activeOffers} />
+        <OfferPieChart   offersData={filteredData} offers={activeOffers} />
       </div>
 
       {/* Daily Table */}

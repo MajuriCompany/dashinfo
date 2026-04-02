@@ -17,7 +17,7 @@ export default function OfferDetail() {
   const { data, loading, error, refresh }               = useSheetData(activeOffers, settings, apiKey, buyersApiKey)
   const { setRefreshFn }                                = useContext(RefreshContext)
   const [selectedId, setSelectedId]                     = useState(activeOffers[0]?.id || '')
-  const [range, setRange]                               = useState(getPresetRange('last_30'))
+  const [range, setRange]                               = useState(getPresetRange('mes_atual'))
 
   useEffect(() => { setRefreshFn(() => refresh) }, [refresh, setRefreshFn])
 

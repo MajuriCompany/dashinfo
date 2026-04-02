@@ -5,15 +5,15 @@ import { getPresetRange } from '../utils/dateUtils'
 const PRESETS = [
   { key: 'today',      label: 'Hoje' },
   { key: 'yesterday',  label: 'Ontem' },
+  { key: 'mes_atual',  label: 'Mês atual' },
   { key: 'this_week',  label: 'Esta semana' },
-  { key: 'this_month', label: 'Este mês' },
   { key: 'last_7',     label: 'Últimos 7 dias' },
   { key: 'last_30',    label: 'Últimos 30 dias' },
   { key: 'custom',     label: 'Personalizado' },
 ]
 
 export default function DateFilter({ value, onChange }) {
-  const [active, setActive]   = useState('this_month')
+  const [active, setActive]   = useState('mes_atual')
   const [custom, setCustom]   = useState({ start: '', end: '' })
   const [showCustom, setShowCustom] = useState(false)
 
