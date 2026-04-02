@@ -67,7 +67,7 @@ export default function Overview() {
     })
     return Object.values(byDate)
       .sort((a, b) => a.date - b.date)
-      .map(r => ({ ...r, roi: r.gasto > 0 ? r.faturamento / r.gasto : null }))
+      .map(r => ({ ...r, roi: r.gasto > 0 ? r.comissao / r.gasto : null }))
   }, [filteredData, activeOffers])
 
   const monthRows = useMemo(() => {
