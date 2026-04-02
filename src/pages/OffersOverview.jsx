@@ -55,8 +55,8 @@ function MiniPie({ data, title }) {
 
 // ── Per-offer card ────────────────────────────────────────────────────────────
 
-function OfferCard({ offer, rows, productRows, range }) {
-  const metrics = useMemo(() => calcMetrics(rows, null), [rows])
+function OfferCard({ offer, rows, productRows, range, aliquota }) {
+  const metrics = useMemo(() => calcMetrics(rows, aliquota), [rows, aliquota])
 
   // Filter product rows by date range
   const filteredProducts = useMemo(() => {
@@ -160,7 +160,7 @@ export default function OffersOverview() {
 
       <DateFilter onChange={setRange} />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         {activeOffers.map(offer => (
           <OfferCard
             key={offer.id}
@@ -168,6 +168,7 @@ export default function OffersOverview() {
             rows={filteredData[offer.id] || []}
             productRows={productRows}
             range={range}
+            aliquota={settings.aliquota}
           />
         ))}
       </div>
