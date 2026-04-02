@@ -203,7 +203,7 @@ export async function fetchBuyersDataByOffer(buyersApiKey, offers) {
 // ---------------------------------------------------------------------------
 // MERGE final por dia para uma oferta
 // ---------------------------------------------------------------------------
-export function mergeOfferData(offerRows, metaRows, usdRate, buyersData, metaCurrency = 'USD') {
+export function mergeOfferData(offerRows, metaRows, getRateForDate, buyersData, metaCurrency = 'USD') {
   const byDate = {}
 
   // 1. Seed: dados históricos da aba da oferta (gasto BRL + faturamento BRL como fallback)
@@ -237,8 +237,9 @@ export function mergeOfferData(offerRows, metaRows, usdRate, buyersData, metaCur
   // 3. Gasto e tráfego do Meta (fonte primária — USD → BRL)
   for (const meta of metaRows) {
     const key   = meta.date.toISOString().split('T')[0]
-    // Converte USD → BRL (ou usa direto se já for BRL)
-    const gasto = metaCurrency === 'BRL' ? meta.spent_usd : meta.spent_usd * usdRate
+    // Converte USD → BRL usando a cotação do próprio dia (ou mais próxima anterior)
+    const rate  = typeof getRateForDate === 'function' ? getRateForDate(key) : getRateForDate
+    const gasto = metaCurrency === 'BRL' ? meta.spent_usd : meta.spent_usd * rate
 
     if (!byDate[key]) byDate[key] = { date: meta.date, faturamento: 0, faturamento_front: 0, comissao: 0, vendas: 0, vendas_front: 0, cpc: null, cpc_ic: null, cpi: null, conv_checkout: null }
 
@@ -266,7 +267,7 @@ export function mergeOfferData(offerRows, metaRows, usdRate, buyersData, metaCur
 // ---------------------------------------------------------------------------
 // FETCH de uma oferta
 // ---------------------------------------------------------------------------
-export async function fetchOfferData(offer, apiKey, usdRate, buyersDataByOffer = {}) {
+export async function fetchOfferData(offer, apiKey, getRateForDate, buyersDataByOffer = {}) {
   const [offerRows, metaRows] = await Promise.all([
     fetchRange(offer.resultSheetId, `${offer.resultTab}!A:N`, apiKey)
       .then(parseOfferResultRows)
@@ -278,13 +279,13 @@ export async function fetchOfferData(offer, apiKey, usdRate, buyersDataByOffer =
   ])
 
   const buyers = buyersDataByOffer[offer.id] || null
-  return mergeOfferData(offerRows, metaRows, usdRate, buyers, offer.metaCurrency || 'USD')
+  return mergeOfferData(offerRows, metaRows, getRateForDate, buyers, offer.metaCurrency || 'USD')
 }
 
 // ---------------------------------------------------------------------------
 // FETCH de todas as ofertas
 // ---------------------------------------------------------------------------
-export async function fetchAllOffersData(offers, apiKey, usdRate, buyersApiKey = '') {
+export async function fetchAllOffersData(offers, apiKey, getRateForDate, buyersApiKey = '') {
   let buyersDataByOffer = {}
   if (buyersApiKey) {
     try {
@@ -295,7 +296,7 @@ export async function fetchAllOffersData(offers, apiKey, usdRate, buyersApiKey =
   }
 
   const results = await Promise.allSettled(
-    offers.map(o => fetchOfferData(o, apiKey, usdRate, buyersDataByOffer))
+    offers.map(o => fetchOfferData(o, apiKey, getRateForDate, buyersDataByOffer))
   )
 
   const data = {}

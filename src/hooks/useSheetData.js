@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { fetchAllOffersData, invalidateCache } from '../services/sheetsService'
+import { fetchAndCacheRates, makeGetRate } from '../services/exchangeRateService'
 import { enrichRow } from '../utils/calculations'
 
 export function useSheetData(offers, settings, apiKey, buyersApiKey = '') {
@@ -14,7 +15,10 @@ export function useSheetData(offers, settings, apiKey, buyersApiKey = '') {
     if (invalidate) invalidateCache()
 
     try {
-      const raw = await fetchAllOffersData(offers, apiKey, settings.usdRate, buyersApiKey)
+      const ratesMap    = await fetchAndCacheRates()
+      const getRateForDate = makeGetRate(ratesMap, settings.usdRate)
+
+      const raw = await fetchAllOffersData(offers, apiKey, getRateForDate, buyersApiKey)
       const enriched = {}
       for (const [id, rows] of Object.entries(raw)) {
         enriched[id] = rows.map(r => enrichRow(r, settings.aliquota))

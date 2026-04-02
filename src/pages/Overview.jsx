@@ -1,10 +1,11 @@
-import { useState, useEffect, useContext, useMemo } from 'react'
+import { useState, useEffect, useContext, useMemo, useRef } from 'react'
 import { DollarSign, TrendingUp, ShoppingCart, Percent } from 'lucide-react'
 import { useAppConfig } from '../hooks/useAppConfig'
 import { useSheetData } from '../hooks/useSheetData'
 import { calcMetrics, signal } from '../utils/calculations'
 import { fmt } from '../utils/formatters'
 import { getPresetRange, getMesAtualKey, inRange } from '../utils/dateUtils'
+import { fetchAndCacheRates, makeGetRate } from '../services/exchangeRateService'
 import { useMonthlyGoals } from '../hooks/useMonthlyGoals'
 import { RefreshContext } from '../components/Layout'
 import KPICard from '../components/KPICard'
@@ -21,6 +22,15 @@ export default function Overview() {
   const { data, loading, error, refresh }               = useSheetData(activeOffers, settings, apiKey, buyersApiKey)
   const { setRefreshFn }                                = useContext(RefreshContext)
   const [range, setRange] = useState(getPresetRange('mes_atual'))
+  const [todayRate, setTodayRate] = useState(null)
+
+  useEffect(() => {
+    fetchAndCacheRates().then(rates => {
+      const getRateForDate = makeGetRate(rates, settings.usdRate)
+      const todayKey = new Date().toISOString().split('T')[0]
+      setTodayRate(getRateForDate(todayKey))
+    })
+  }, [settings.usdRate])
 
   useEffect(() => { setRefreshFn(() => refresh) }, [refresh, setRefreshFn])
 
@@ -76,8 +86,11 @@ export default function Overview() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold text-gray-800">Visão Geral</h2>
-        <div className="text-xs text-gray-500 bg-white border rounded px-2 py-1">
-          USD R$ {settings.usdRate.toFixed(2)}
+        <div className="text-xs text-gray-500 bg-white border rounded px-2 py-1" title="Cotação automática do dia anterior (AwesomeAPI)">
+          USD R$ {(todayRate ?? settings.usdRate).toFixed(2)}
+          {todayRate && Math.abs(todayRate - settings.usdRate) > 0.01 && (
+            <span className="ml-1 text-blue-500">(auto)</span>
+          )}
         </div>
       </div>
 
