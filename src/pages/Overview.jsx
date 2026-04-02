@@ -188,11 +188,20 @@ export default function Overview() {
               {dailyRows.map((row, i) => (
                 <tr key={i} className={`hover:bg-gray-50/80 transition-colors ${row.lucro_bruto < 0 ? 'bg-red-50/50' : ''}`}>
                   <td className="px-4 py-2.5 text-gray-600 font-medium">{fmt.date(row.date)}</td>
-                  {activeOffers.map(o => (
-                    <td key={o.id} className="px-3 py-2.5 text-right text-gray-600">
-                      {fmt.brl(row.offerLucros?.[o.id] || 0)}
-                    </td>
-                  ))}
+                  {activeOffers.map(o => {
+                    const v = row.offerLucros?.[o.id] || 0
+                    return (
+                      <td key={o.id} className="px-3 py-2.5 text-right">
+                        <span className={`px-2 py-0.5 rounded-md text-[11px] font-semibold border ${
+                          v > 0 ? 'text-success bg-success-light border-success' :
+                          v < 0 ? 'text-danger bg-danger-light border-danger' :
+                                  'text-gray-400 bg-gray-50 border-gray-200'
+                        }`}>
+                          {fmt.brl(v)}
+                        </span>
+                      </td>
+                    )
+                  })}
                   <td className="px-3 py-2.5 text-right text-gray-600">{fmt.brl(row.faturamento)}</td>
                   <td className="px-3 py-2.5 text-right text-gray-600">{fmt.brl(row.comissao)}</td>
                   <td className="px-3 py-2.5 text-right text-gray-600">{fmt.brl(row.gasto)}</td>
