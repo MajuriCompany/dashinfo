@@ -62,6 +62,13 @@ export function inRange(date, start, end) {
   return date >= start && date <= end
 }
 
+// Retorna a chave "YYYY-MM" do mês comercial de uma data qualquer
+export function getCommercialMonthKey(date) {
+  let y = date.getFullYear(), m = date.getMonth()
+  if (date.getDate() < 3) { m--; if (m < 0) { m = 11; y-- } }
+  return `${y}-${String(m + 1).padStart(2, '0')}`
+}
+
 // Retorna a chave "YYYY-MM" do mês comercial atual (dia 3 ao dia 2)
 export function getMesAtualKey() {
   const today = new Date()
