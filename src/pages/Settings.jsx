@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { Plus, Edit2, Trash2, PauseCircle, PlayCircle, AlertTriangle, Save, RefreshCw } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Plus, Edit2, Trash2, PauseCircle, PlayCircle, AlertTriangle, Save, RefreshCw, Upload, Download } from 'lucide-react'
 import { useAppConfig } from '../hooks/useAppConfig'
 import { useMonthlyGoals } from '../hooks/useMonthlyGoals'
 import { getMesAtualKey } from '../utils/dateUtils'
@@ -34,6 +34,44 @@ export default function Settings() {
   const [goalMonth,  setGoalMonth]  = useState(getMesAtualKey)
   const [goalPiso,   setGoalPiso]   = useState('')
   const [goalStretch, setGoalStretch] = useState('')
+
+  const [importText,   setImportText]   = useState('')
+  const [importStatus, setImportStatus] = useState(null) // 'ok' | 'error'
+  const importRef = useRef(null)
+
+  const EXPORT_KEYS = [
+    'dash_settings', 'dash_offers', 'dash_api_key',
+    'dash_buyers_api_key', 'dash_credentials', 'dash_monthly_goals',
+  ]
+
+  function exportConfig() {
+    const data = {}
+    EXPORT_KEYS.forEach(k => {
+      const v = localStorage.getItem(k)
+      if (v != null) data[k] = v
+    })
+    const code = btoa(unescape(encodeURIComponent(JSON.stringify(data))))
+    navigator.clipboard.writeText(code).then(() => {
+      alert('Código copiado para a área de transferência!\n\nCole em outro navegador via "Importar configurações".')
+    }).catch(() => {
+      prompt('Copie este código e cole em outro navegador:', code)
+    })
+  }
+
+  function importConfig() {
+    try {
+      const raw  = decodeURIComponent(escape(atob(importText.trim())))
+      const data = JSON.parse(raw)
+      let count = 0
+      EXPORT_KEYS.forEach(k => {
+        if (data[k] != null) { localStorage.setItem(k, data[k]); count++ }
+      })
+      setImportStatus('ok')
+      setTimeout(() => window.location.reload(), 1200)
+    } catch {
+      setImportStatus('error')
+    }
+  }
 
   // Populate form when month changes
   useEffect(() => {
@@ -402,6 +440,49 @@ export default function Settings() {
       </div>
 
       <DiagnosticPanel offers={offers} apiKey={apiKey} buyersApiKey={buyersApiKey} />
+
+      {/* Exportar / Importar configurações */}
+      <div className="bg-white rounded-lg shadow-sm p-5 space-y-4">
+        <h3 className="font-semibold text-gray-700">Sincronizar com outro navegador</h3>
+        <p className="text-xs text-gray-400 -mt-2">
+          Exporte um código com todas as configurações (login, chaves de API, ofertas, metas)
+          e importe em qualquer outro navegador ou dispositivo.
+        </p>
+
+        <button
+          onClick={exportConfig}
+          className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700"
+        >
+          <Download className="w-4 h-4" />
+          Exportar configurações
+        </button>
+
+        <div className="space-y-2">
+          <label className="text-xs text-gray-500 block">Colar código de outro dispositivo:</label>
+          <textarea
+            ref={importRef}
+            rows={3}
+            placeholder="Cole aqui o código exportado de outro navegador..."
+            className="border rounded px-3 py-2 text-xs w-full font-mono resize-none"
+            value={importText}
+            onChange={e => { setImportText(e.target.value); setImportStatus(null) }}
+          />
+          {importStatus === 'ok' && (
+            <p className="text-xs text-green-600 font-medium">Configurações importadas! Recarregando...</p>
+          )}
+          {importStatus === 'error' && (
+            <p className="text-xs text-red-500">Código inválido. Certifique-se de copiar o código completo.</p>
+          )}
+          <button
+            onClick={importConfig}
+            disabled={!importText.trim()}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-40"
+          >
+            <Upload className="w-4 h-4" />
+            Importar e recarregar
+          </button>
+        </div>
+      </div>
 
       <button
         onClick={() => { if (confirm('Restaurar todos os padrões? Isso vai resetar ofertas e configurações.')) resetDefaults() }}
