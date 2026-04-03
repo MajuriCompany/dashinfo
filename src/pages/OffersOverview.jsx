@@ -9,8 +9,9 @@ import { RefreshContext } from '../components/Layout'
 import DateFilter from '../components/DateFilter'
 import { Spinner, NoApiKey, ErrorState } from '../components/LoadingState'
 import KPICard from '../components/KPICard'
-import { TrendingUp, ShoppingCart, DollarSign, Percent } from 'lucide-react'
-import { useEffect } from 'react'
+import { TrendingUp, ShoppingCart, DollarSign, Percent, Plus, Trash2 } from 'lucide-react'
+import { useEffect, useRef } from 'react'
+import { useManualEntries } from '../hooks/useManualEntries'
 
 // ── Pie helpers ──────────────────────────────────────────────────────────────
 
@@ -131,11 +132,18 @@ function OfferCard({ offer, rows, productRows, range, aliquota }) {
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
+const todayStr = () => new Date().toISOString().split('T')[0]
+
 export default function OffersOverview() {
   const { settings, apiKey, buyersApiKey, activeOffers } = useAppConfig()
   const { data, productRows, loading, error, refresh }   = useSheetData(activeOffers, settings, apiKey, buyersApiKey)
   const { setRefreshFn }                                  = useContext(RefreshContext)
+  const { entries, addEntry, removeEntry }               = useManualEntries()
   const [range, setRange] = useState(getPresetRange('mes_atual'))
+
+  // Form state
+  const [form, setForm] = useState({ date: todayStr(), offerName: '', lucro: '' })
+  const lucroRef = useRef(null)
 
   useEffect(() => { setRefreshFn(() => refresh) }, [refresh, setRefreshFn])
 
@@ -147,9 +155,27 @@ export default function OffersOverview() {
     return result
   }, [data, activeOffers, range])
 
-  if (!apiKey)                         return <NoApiKey />
+  // Manual entries filtered by date range
+  const filteredEntries = useMemo(() =>
+    entries.filter(e => {
+      const d = new Date(e.date + 'T12:00:00')
+      return inRange(d, range.start, range.end)
+    }).sort((a, b) => b.date.localeCompare(a.date))
+  , [entries, range])
+
+  const manualTotal = filteredEntries.reduce((s, e) => s + e.lucro, 0)
+
+  function handleAdd(ev) {
+    ev.preventDefault()
+    if (!form.date || !form.offerName || form.lucro === '') return
+    addEntry(form.date, form.offerName.trim(), form.lucro)
+    setForm({ date: todayStr(), offerName: '', lucro: '' })
+    lucroRef.current?.focus()
+  }
+
+  if (!apiKey)                              return <NoApiKey />
   if (loading && !Object.keys(data).length) return <Spinner />
-  if (error)                           return <ErrorState message={error} />
+  if (error)                                return <ErrorState message={error} />
 
   return (
     <div className="space-y-5">
@@ -171,6 +197,117 @@ export default function OffersOverview() {
             aliquota={settings.aliquota}
           />
         ))}
+      </div>
+
+      {/* ── Entradas Manuais ── */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-800">Entradas Manuais</h3>
+            <p className="text-xs text-gray-400 mt-0.5">Ofertas em validação sem dashboard · afeta só o lucro</p>
+          </div>
+          {filteredEntries.length > 0 && (
+            <div className={`text-sm font-bold px-3 py-1 rounded-lg border ${manualTotal >= 0 ? 'text-emerald-600 bg-emerald-50 border-emerald-200' : 'text-red-500 bg-red-50 border-red-200'}`}>
+              {manualTotal >= 0 ? '+' : ''}{fmt.brl(manualTotal)}
+            </div>
+          )}
+        </div>
+
+        <div className="p-5 space-y-4">
+          {/* Form */}
+          <form onSubmit={handleAdd} className="grid grid-cols-[auto_1fr_auto_auto] gap-2 items-end">
+            <div>
+              <label className="text-[11px] text-gray-400 block mb-1">Data</label>
+              <input
+                type="date"
+                className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
+                value={form.date}
+                onChange={e => setForm(p => ({ ...p, date: e.target.value }))}
+                required
+              />
+            </div>
+            <div>
+              <label className="text-[11px] text-gray-400 block mb-1">Nome da oferta</label>
+              <input
+                type="text"
+                placeholder="ex: Produto X (validação)"
+                className="border border-gray-200 rounded-lg px-3 py-2 text-sm w-full focus:outline-none focus:border-blue-400"
+                value={form.offerName}
+                onChange={e => setForm(p => ({ ...p, offerName: e.target.value }))}
+                required
+              />
+            </div>
+            <div>
+              <label className="text-[11px] text-gray-400 block mb-1">Lucro / Prejuízo (R$)</label>
+              <input
+                ref={lucroRef}
+                type="number"
+                step="0.01"
+                placeholder="ex: 350 ou -120"
+                className="border border-gray-200 rounded-lg px-3 py-2 text-sm w-40 focus:outline-none focus:border-blue-400"
+                value={form.lucro}
+                onChange={e => setForm(p => ({ ...p, lucro: e.target.value }))}
+                required
+              />
+            </div>
+            <button
+              type="submit"
+              className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700"
+            >
+              <Plus className="w-4 h-4" /> Adicionar
+            </button>
+          </form>
+
+          {/* Entries table */}
+          {filteredEntries.length > 0 ? (
+            <div className="border border-gray-100 rounded-lg overflow-hidden">
+              <table className="w-full text-xs">
+                <thead className="bg-gray-50 border-b border-gray-100">
+                  <tr>
+                    <th className="text-left px-4 py-2.5 text-gray-400 font-medium">Data</th>
+                    <th className="text-left px-3 py-2.5 text-gray-400 font-medium">Oferta</th>
+                    <th className="text-right px-3 py-2.5 text-gray-400 font-medium">Lucro / Prejuízo</th>
+                    <th className="w-10" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {filteredEntries.map(e => (
+                    <tr key={e.id} className="hover:bg-gray-50/80">
+                      <td className="px-4 py-2.5 text-gray-600 font-medium">{e.date}</td>
+                      <td className="px-3 py-2.5 text-gray-700">{e.offerName}</td>
+                      <td className="px-3 py-2.5 text-right">
+                        <span className={`px-2 py-0.5 rounded-md font-semibold border ${e.lucro >= 0 ? 'text-emerald-600 bg-emerald-50 border-emerald-200' : 'text-red-500 bg-red-50 border-red-200'}`}>
+                          {e.lucro >= 0 ? '+' : ''}{fmt.brl(e.lucro)}
+                        </span>
+                      </td>
+                      <td className="px-2 py-2.5 text-center">
+                        <button
+                          onClick={() => removeEntry(e.id)}
+                          className="p-1 text-gray-300 hover:text-red-400 transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="bg-gray-50 border-t-2 border-gray-200">
+                  <tr>
+                    <td colSpan={2} className="px-4 py-2.5 text-xs font-semibold text-gray-500">Total no período</td>
+                    <td className={`px-3 py-2.5 text-right text-sm font-bold ${manualTotal >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                      {manualTotal >= 0 ? '+' : ''}{fmt.brl(manualTotal)}
+                    </td>
+                    <td />
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          ) : (
+            <p className="text-xs text-gray-400 text-center py-4">
+              Nenhuma entrada no período selecionado.
+            </p>
+          )}
+        </div>
       </div>
     </div>
   )
