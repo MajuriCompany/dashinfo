@@ -200,22 +200,21 @@ export default function OffersOverview() {
       </div>
 
       {/* ── Entradas Manuais ── */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-          <div>
-            <h3 className="text-sm font-semibold text-gray-800">Entradas Manuais</h3>
-            <p className="text-xs text-gray-400 mt-0.5">Ofertas em validação sem dashboard · afeta só o lucro</p>
-          </div>
-          {filteredEntries.length > 0 && (
-            <div className={`text-sm font-bold px-3 py-1 rounded-lg border ${manualTotal >= 0 ? 'text-emerald-600 bg-emerald-50 border-emerald-200' : 'text-red-500 bg-red-50 border-red-200'}`}>
-              {manualTotal >= 0 ? '+' : ''}{fmt.brl(manualTotal)}
+      <div className="space-y-3">
+        {/* Header + form */}
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-sm font-semibold text-gray-800">Entradas Manuais</h3>
+              <p className="text-xs text-gray-400 mt-0.5">Ofertas em validação sem dashboard · registre dia a dia por oferta</p>
             </div>
-          )}
-        </div>
-
-        <div className="p-5 space-y-4">
-          {/* Form */}
-          <form onSubmit={handleAdd} className="grid grid-cols-[auto_1fr_auto_auto] gap-2 items-end">
+            {filteredEntries.length > 0 && (
+              <div className={`text-sm font-bold px-3 py-1.5 rounded-lg border ${manualTotal >= 0 ? 'text-emerald-600 bg-emerald-50 border-emerald-200' : 'text-red-500 bg-red-50 border-red-200'}`}>
+                Total no período: {manualTotal >= 0 ? '+' : ''}{fmt.brl(manualTotal)}
+              </div>
+            )}
+          </div>
+          <form onSubmit={handleAdd} className="flex flex-wrap gap-2 items-end">
             <div>
               <label className="text-[11px] text-gray-400 block mb-1">Data</label>
               <input
@@ -226,16 +225,23 @@ export default function OffersOverview() {
                 required
               />
             </div>
-            <div>
+            <div className="flex-1 min-w-48">
               <label className="text-[11px] text-gray-400 block mb-1">Nome da oferta</label>
               <input
                 type="text"
-                placeholder="ex: Produto X (validação)"
+                placeholder="ex: El Método del Vínculo"
                 className="border border-gray-200 rounded-lg px-3 py-2 text-sm w-full focus:outline-none focus:border-blue-400"
                 value={form.offerName}
                 onChange={e => setForm(p => ({ ...p, offerName: e.target.value }))}
+                list="offer-names-list"
                 required
               />
+              {/* Sugere nomes já usados */}
+              <datalist id="offer-names-list">
+                {[...new Set(entries.map(e => e.offerName))].map(n => (
+                  <option key={n} value={n} />
+                ))}
+              </datalist>
             </div>
             <div>
               <label className="text-[11px] text-gray-400 block mb-1">Lucro / Prejuízo (R$)</label>
@@ -244,7 +250,7 @@ export default function OffersOverview() {
                 type="number"
                 step="0.01"
                 placeholder="ex: 350 ou -120"
-                className="border border-gray-200 rounded-lg px-3 py-2 text-sm w-40 focus:outline-none focus:border-blue-400"
+                className="border border-gray-200 rounded-lg px-3 py-2 text-sm w-36 focus:outline-none focus:border-blue-400"
                 value={form.lucro}
                 onChange={e => setForm(p => ({ ...p, lucro: e.target.value }))}
                 required
@@ -257,57 +263,64 @@ export default function OffersOverview() {
               <Plus className="w-4 h-4" /> Adicionar
             </button>
           </form>
-
-          {/* Entries table */}
-          {filteredEntries.length > 0 ? (
-            <div className="border border-gray-100 rounded-lg overflow-hidden">
-              <table className="w-full text-xs">
-                <thead className="bg-gray-50 border-b border-gray-100">
-                  <tr>
-                    <th className="text-left px-4 py-2.5 text-gray-400 font-medium">Data</th>
-                    <th className="text-left px-3 py-2.5 text-gray-400 font-medium">Oferta</th>
-                    <th className="text-right px-3 py-2.5 text-gray-400 font-medium">Lucro / Prejuízo</th>
-                    <th className="w-10" />
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {filteredEntries.map(e => (
-                    <tr key={e.id} className="hover:bg-gray-50/80">
-                      <td className="px-4 py-2.5 text-gray-600 font-medium">{e.date}</td>
-                      <td className="px-3 py-2.5 text-gray-700">{e.offerName}</td>
-                      <td className="px-3 py-2.5 text-right">
-                        <span className={`px-2 py-0.5 rounded-md font-semibold border ${e.lucro >= 0 ? 'text-emerald-600 bg-emerald-50 border-emerald-200' : 'text-red-500 bg-red-50 border-red-200'}`}>
-                          {e.lucro >= 0 ? '+' : ''}{fmt.brl(e.lucro)}
-                        </span>
-                      </td>
-                      <td className="px-2 py-2.5 text-center">
-                        <button
-                          onClick={() => removeEntry(e.id)}
-                          className="p-1 text-gray-300 hover:text-red-400 transition-colors"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot className="bg-gray-50 border-t-2 border-gray-200">
-                  <tr>
-                    <td colSpan={2} className="px-4 py-2.5 text-xs font-semibold text-gray-500">Total no período</td>
-                    <td className={`px-3 py-2.5 text-right text-sm font-bold ${manualTotal >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                      {manualTotal >= 0 ? '+' : ''}{fmt.brl(manualTotal)}
-                    </td>
-                    <td />
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          ) : (
-            <p className="text-xs text-gray-400 text-center py-4">
-              Nenhuma entrada no período selecionado.
-            </p>
-          )}
         </div>
+
+        {/* One card per offer — full history (no date filter) */}
+        {(() => {
+          const byOffer = {}
+          entries.forEach(e => {
+            if (!byOffer[e.offerName]) byOffer[e.offerName] = []
+            byOffer[e.offerName].push(e)
+          })
+          const offerNames = Object.keys(byOffer).sort()
+          if (offerNames.length === 0) return (
+            <p className="text-xs text-gray-400 text-center py-2">Nenhuma entrada ainda.</p>
+          )
+          return (
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+              {offerNames.map(name => {
+                const offerEntries = byOffer[name].sort((a, b) => b.date.localeCompare(a.date))
+                const total = offerEntries.reduce((s, e) => s + e.lucro, 0)
+                return (
+                  <div key={name} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                    <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+                      <h4 className="text-sm font-semibold text-gray-800">{name}</h4>
+                      <span className={`text-xs font-bold px-2.5 py-1 rounded-lg border ${total >= 0 ? 'text-emerald-600 bg-emerald-50 border-emerald-200' : 'text-red-500 bg-red-50 border-red-200'}`}>
+                        Total: {total >= 0 ? '+' : ''}{fmt.brl(total)}
+                      </span>
+                    </div>
+                    <table className="w-full text-xs">
+                      <thead className="bg-gray-50 border-b border-gray-100">
+                        <tr>
+                          <th className="text-left px-4 py-2 text-gray-400 font-medium">Data</th>
+                          <th className="text-right px-4 py-2 text-gray-400 font-medium">Lucro / Prejuízo</th>
+                          <th className="w-8" />
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {offerEntries.map(e => (
+                          <tr key={e.id} className="hover:bg-gray-50/80">
+                            <td className="px-4 py-2.5 text-gray-600 font-medium">{e.date}</td>
+                            <td className="px-4 py-2.5 text-right">
+                              <span className={`px-2 py-0.5 rounded-md font-semibold border ${e.lucro >= 0 ? 'text-emerald-600 bg-emerald-50 border-emerald-200' : 'text-red-500 bg-red-50 border-red-200'}`}>
+                                {e.lucro >= 0 ? '+' : ''}{fmt.brl(e.lucro)}
+                              </span>
+                            </td>
+                            <td className="px-2 py-2.5 text-center">
+                              <button onClick={() => removeEntry(e.id)} className="p-1 text-gray-300 hover:text-red-400">
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )
+              })}
+            </div>
+          )
+        })()}
       </div>
     </div>
   )
