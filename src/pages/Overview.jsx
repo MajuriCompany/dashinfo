@@ -14,7 +14,6 @@ import GoalProgressBar from '../components/ProgressBar'
 import ProfitLineChart from '../components/charts/ProfitLineChart'
 import OfferBarChart from '../components/charts/OfferBarChart'
 import OfferPieChart from '../components/charts/OfferPieChart'
-import MonthlyHistory from '../components/MonthlyHistory'
 import { Spinner, NoApiKey, ErrorState } from '../components/LoadingState'
 
 const roiClass = roi =>
@@ -151,10 +150,7 @@ export default function Overview() {
         <OfferPieChart   offersData={filteredData} offers={activeOffers} />
       </div>
 
-      {/* ── Histórico Mensal ── */}
-      <MonthlyHistory data={data} settings={settings} />
-
-      {/* ── Detalhe Diário ── */}
+{/* ── Detalhe Diário ── */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
           <div>
