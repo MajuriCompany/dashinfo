@@ -6,21 +6,45 @@ function load() {
   try { return JSON.parse(localStorage.getItem(KEY)) || [] } catch { return [] }
 }
 
+function toNum(v) {
+  return v !== '' && v != null ? Number(v) : null
+}
+
 export function useManualEntries() {
   const [entries, setEntries] = useState(load)
 
   const addEntry = useCallback((fields) => {
     setEntries(prev => {
       const next = [...prev, {
-        id:              Date.now().toString(),
-        date:            fields.date,           // "YYYY-MM-DD"
-        offerName:       fields.offerName,
-        lucro:           Number(fields.lucro),
-        custoClique:     fields.custoClique     !== '' ? Number(fields.custoClique)     : null,
-        custoCheckout:   fields.custoCheckout   !== '' ? Number(fields.custoCheckout)   : null,
-        vendas:          fields.vendas          !== '' ? Number(fields.vendas)          : null,
-        valorGasto:      fields.valorGasto      !== '' ? Number(fields.valorGasto)      : null,
+        id:            Date.now().toString(),
+        date:          fields.date,
+        offerName:     fields.offerName,
+        custoClique:   toNum(fields.custoClique),
+        custoCheckout: toNum(fields.custoCheckout),
+        vendas:        toNum(fields.vendas),
+        gasto:         toNum(fields.gasto),
+        faturado:      toNum(fields.faturado),
       }]
+      localStorage.setItem(KEY, JSON.stringify(next))
+      return next
+    })
+  }, [])
+
+  const updateEntry = useCallback((id, fields) => {
+    setEntries(prev => {
+      const next = prev.map(e => e.id !== id ? e : {
+        ...e,
+        date:          fields.date,
+        offerName:     fields.offerName,
+        custoClique:   toNum(fields.custoClique),
+        custoCheckout: toNum(fields.custoCheckout),
+        vendas:        toNum(fields.vendas),
+        gasto:         toNum(fields.gasto),
+        faturado:      toNum(fields.faturado),
+        // limpa campo antigo se existia
+        lucro:         undefined,
+        valorGasto:    undefined,
+      })
       localStorage.setItem(KEY, JSON.stringify(next))
       return next
     })
@@ -34,5 +58,5 @@ export function useManualEntries() {
     })
   }, [])
 
-  return { entries, addEntry, removeEntry }
+  return { entries, addEntry, updateEntry, removeEntry }
 }
