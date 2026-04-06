@@ -9,13 +9,17 @@ function load() {
 export function useManualEntries() {
   const [entries, setEntries] = useState(load)
 
-  const addEntry = useCallback((date, offerName, lucro) => {
+  const addEntry = useCallback((fields) => {
     setEntries(prev => {
       const next = [...prev, {
-        id:        Date.now().toString(),
-        date,       // "YYYY-MM-DD"
-        offerName,
-        lucro:     Number(lucro),
+        id:              Date.now().toString(),
+        date:            fields.date,           // "YYYY-MM-DD"
+        offerName:       fields.offerName,
+        lucro:           Number(fields.lucro),
+        custoClique:     fields.custoClique     !== '' ? Number(fields.custoClique)     : null,
+        custoCheckout:   fields.custoCheckout   !== '' ? Number(fields.custoCheckout)   : null,
+        vendas:          fields.vendas          !== '' ? Number(fields.vendas)          : null,
+        valorGasto:      fields.valorGasto      !== '' ? Number(fields.valorGasto)      : null,
       }]
       localStorage.setItem(KEY, JSON.stringify(next))
       return next

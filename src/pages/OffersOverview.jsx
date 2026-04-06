@@ -142,7 +142,10 @@ export default function OffersOverview() {
   const [range, setRange] = useState(getPresetRange('mes_atual'))
 
   // Form state
-  const [form, setForm] = useState({ date: todayStr(), offerName: '', lucro: '' })
+  const [form, setForm] = useState({
+    date: todayStr(), offerName: '',
+    custoClique: '', custoCheckout: '', vendas: '', valorGasto: '', lucro: '',
+  })
   const lucroRef = useRef(null)
 
   useEffect(() => { setRefreshFn(() => refresh) }, [refresh, setRefreshFn])
@@ -168,9 +171,23 @@ export default function OffersOverview() {
   function handleAdd(ev) {
     ev.preventDefault()
     if (!form.date || !form.offerName || form.lucro === '') return
-    addEntry(form.date, form.offerName.trim(), form.lucro)
-    setForm({ date: todayStr(), offerName: '', lucro: '' })
+    addEntry({ ...form, offerName: form.offerName.trim() })
+    setForm({ date: todayStr(), offerName: '', custoClique: '', custoCheckout: '', vendas: '', valorGasto: '', lucro: '' })
     lucroRef.current?.focus()
+  }
+
+  function convCliqueCheckout(e) {
+    if (e.custoClique && e.custoCheckout && e.custoCheckout > 0)
+      return (e.custoClique / e.custoCheckout) * 100
+    return null
+  }
+
+  function convCheckoutVendas(e) {
+    if (e.vendas != null && e.custoCheckout != null && e.valorGasto && e.valorGasto > 0 && e.custoCheckout > 0) {
+      const checkouts = e.valorGasto / e.custoCheckout
+      return checkouts > 0 ? (e.vendas / checkouts) * 100 : null
+    }
+    return null
   }
 
   if (!apiKey)                              return <NoApiKey />
@@ -214,54 +231,109 @@ export default function OffersOverview() {
               </div>
             )}
           </div>
-          <form onSubmit={handleAdd} className="flex flex-wrap gap-2 items-end">
-            <div>
-              <label className="text-[11px] text-gray-400 block mb-1">Data</label>
-              <input
-                type="date"
-                className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
-                value={form.date}
-                onChange={e => setForm(p => ({ ...p, date: e.target.value }))}
-                required
-              />
+          <form onSubmit={handleAdd} className="space-y-3">
+            <div className="flex flex-wrap gap-2 items-end">
+              <div>
+                <label className="text-[11px] text-gray-400 block mb-1">Data</label>
+                <input
+                  type="date"
+                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
+                  value={form.date}
+                  onChange={e => setForm(p => ({ ...p, date: e.target.value }))}
+                  required
+                />
+              </div>
+              <div className="flex-1 min-w-48">
+                <label className="text-[11px] text-gray-400 block mb-1">Nome da oferta</label>
+                <input
+                  type="text"
+                  placeholder="ex: El Método del Vínculo"
+                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm w-full focus:outline-none focus:border-blue-400"
+                  value={form.offerName}
+                  onChange={e => setForm(p => ({ ...p, offerName: e.target.value }))}
+                  list="offer-names-list"
+                  required
+                />
+                <datalist id="offer-names-list">
+                  {[...new Set(entries.map(e => e.offerName))].map(n => (
+                    <option key={n} value={n} />
+                  ))}
+                </datalist>
+              </div>
             </div>
-            <div className="flex-1 min-w-48">
-              <label className="text-[11px] text-gray-400 block mb-1">Nome da oferta</label>
-              <input
-                type="text"
-                placeholder="ex: El Método del Vínculo"
-                className="border border-gray-200 rounded-lg px-3 py-2 text-sm w-full focus:outline-none focus:border-blue-400"
-                value={form.offerName}
-                onChange={e => setForm(p => ({ ...p, offerName: e.target.value }))}
-                list="offer-names-list"
-                required
-              />
-              {/* Sugere nomes já usados */}
-              <datalist id="offer-names-list">
-                {[...new Set(entries.map(e => e.offerName))].map(n => (
-                  <option key={n} value={n} />
-                ))}
-              </datalist>
+            <div className="flex flex-wrap gap-2 items-end">
+              <div>
+                <label className="text-[11px] text-gray-400 block mb-1">Custo por Clique (R$)</label>
+                <input
+                  type="number" step="0.01" min="0"
+                  placeholder="ex: 1,50"
+                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm w-32 focus:outline-none focus:border-blue-400"
+                  value={form.custoClique}
+                  onChange={e => setForm(p => ({ ...p, custoClique: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="text-[11px] text-gray-400 block mb-1">Custo por Checkout (R$)</label>
+                <input
+                  type="number" step="0.01" min="0"
+                  placeholder="ex: 25,00"
+                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm w-36 focus:outline-none focus:border-blue-400"
+                  value={form.custoCheckout}
+                  onChange={e => setForm(p => ({ ...p, custoCheckout: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="text-[11px] text-gray-400 block mb-1">Vendas</label>
+                <input
+                  type="number" step="1" min="0"
+                  placeholder="ex: 5"
+                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm w-24 focus:outline-none focus:border-blue-400"
+                  value={form.vendas}
+                  onChange={e => setForm(p => ({ ...p, vendas: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="text-[11px] text-gray-400 block mb-1">Valor Gasto (R$)</label>
+                <input
+                  type="number" step="0.01" min="0"
+                  placeholder="ex: 300,00"
+                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm w-32 focus:outline-none focus:border-blue-400"
+                  value={form.valorGasto}
+                  onChange={e => setForm(p => ({ ...p, valorGasto: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="text-[11px] text-gray-400 block mb-1">Lucro / Prejuízo (R$)</label>
+                <input
+                  ref={lucroRef}
+                  type="number" step="0.01"
+                  placeholder="ex: 350 ou -120"
+                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm w-36 focus:outline-none focus:border-blue-400"
+                  value={form.lucro}
+                  onChange={e => setForm(p => ({ ...p, lucro: e.target.value }))}
+                  required
+                />
+              </div>
+              <button
+                type="submit"
+                className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700"
+              >
+                <Plus className="w-4 h-4" /> Adicionar
+              </button>
             </div>
-            <div>
-              <label className="text-[11px] text-gray-400 block mb-1">Lucro / Prejuízo (R$)</label>
-              <input
-                ref={lucroRef}
-                type="number"
-                step="0.01"
-                placeholder="ex: 350 ou -120"
-                className="border border-gray-200 rounded-lg px-3 py-2 text-sm w-36 focus:outline-none focus:border-blue-400"
-                value={form.lucro}
-                onChange={e => setForm(p => ({ ...p, lucro: e.target.value }))}
-                required
-              />
-            </div>
-            <button
-              type="submit"
-              className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700"
-            >
-              <Plus className="w-4 h-4" /> Adicionar
-            </button>
+            {/* Preview das conversões calculadas */}
+            {(form.custoClique && form.custoCheckout) && (
+              <div className="flex gap-4 text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">
+                <span>Conv. Clique→Checkout: <strong className="text-gray-700">
+                  {((Number(form.custoClique) / Number(form.custoCheckout)) * 100).toFixed(1)}%
+                </strong></span>
+                {form.vendas && form.valorGasto && form.custoCheckout && (
+                  <span>Conv. Checkout→Vendas: <strong className="text-gray-700">
+                    {((Number(form.vendas) / (Number(form.valorGasto) / Number(form.custoCheckout))) * 100).toFixed(1)}%
+                  </strong></span>
+                )}
+              </div>
+            )}
           </form>
         </div>
 
@@ -289,32 +361,50 @@ export default function OffersOverview() {
                         Total: {total >= 0 ? '+' : ''}{fmt.brl(total)}
                       </span>
                     </div>
+                    <div className="overflow-x-auto">
                     <table className="w-full text-xs">
                       <thead className="bg-gray-50 border-b border-gray-100">
                         <tr>
-                          <th className="text-left px-4 py-2 text-gray-400 font-medium">Data</th>
-                          <th className="text-right px-4 py-2 text-gray-400 font-medium">Lucro / Prejuízo</th>
+                          <th className="text-left px-4 py-2 text-gray-400 font-medium whitespace-nowrap">Data</th>
+                          <th className="text-right px-3 py-2 text-gray-400 font-medium whitespace-nowrap">Gasto</th>
+                          <th className="text-right px-3 py-2 text-gray-400 font-medium whitespace-nowrap">CPC</th>
+                          <th className="text-right px-3 py-2 text-gray-400 font-medium whitespace-nowrap">CPCo</th>
+                          <th className="text-right px-3 py-2 text-gray-400 font-medium whitespace-nowrap">Clique→Chk</th>
+                          <th className="text-right px-3 py-2 text-gray-400 font-medium whitespace-nowrap">Chk→Venda</th>
+                          <th className="text-right px-3 py-2 text-gray-400 font-medium whitespace-nowrap">Vendas</th>
+                          <th className="text-right px-4 py-2 text-gray-400 font-medium whitespace-nowrap">Lucro / Prejuízo</th>
                           <th className="w-8" />
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-50">
-                        {offerEntries.map(e => (
-                          <tr key={e.id} className="hover:bg-gray-50/80">
-                            <td className="px-4 py-2.5 text-gray-600 font-medium">{e.date}</td>
-                            <td className="px-4 py-2.5 text-right">
-                              <span className={`px-2 py-0.5 rounded-md font-semibold border ${e.lucro >= 0 ? 'text-emerald-600 bg-emerald-50 border-emerald-200' : 'text-red-500 bg-red-50 border-red-200'}`}>
-                                {e.lucro >= 0 ? '+' : ''}{fmt.brl(e.lucro)}
-                              </span>
-                            </td>
-                            <td className="px-2 py-2.5 text-center">
-                              <button onClick={() => removeEntry(e.id)} className="p-1 text-gray-300 hover:text-red-400">
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
+                        {offerEntries.map(e => {
+                          const cc = convCliqueCheckout(e)
+                          const cv = convCheckoutVendas(e)
+                          return (
+                            <tr key={e.id} className="hover:bg-gray-50/80">
+                              <td className="px-4 py-2.5 text-gray-600 font-medium whitespace-nowrap">{e.date}</td>
+                              <td className="px-3 py-2.5 text-right text-gray-600">{e.valorGasto != null ? fmt.brl(e.valorGasto) : <span className="text-gray-300">—</span>}</td>
+                              <td className="px-3 py-2.5 text-right text-gray-600">{e.custoClique != null ? fmt.brl(e.custoClique) : <span className="text-gray-300">—</span>}</td>
+                              <td className="px-3 py-2.5 text-right text-gray-600">{e.custoCheckout != null ? fmt.brl(e.custoCheckout) : <span className="text-gray-300">—</span>}</td>
+                              <td className="px-3 py-2.5 text-right">{cc != null ? <span className="text-blue-600 font-medium">{cc.toFixed(1)}%</span> : <span className="text-gray-300">—</span>}</td>
+                              <td className="px-3 py-2.5 text-right">{cv != null ? <span className="text-purple-600 font-medium">{cv.toFixed(1)}%</span> : <span className="text-gray-300">—</span>}</td>
+                              <td className="px-3 py-2.5 text-right text-gray-600">{e.vendas != null ? e.vendas : <span className="text-gray-300">—</span>}</td>
+                              <td className="px-4 py-2.5 text-right">
+                                <span className={`px-2 py-0.5 rounded-md font-semibold border ${e.lucro >= 0 ? 'text-emerald-600 bg-emerald-50 border-emerald-200' : 'text-red-500 bg-red-50 border-red-200'}`}>
+                                  {e.lucro >= 0 ? '+' : ''}{fmt.brl(e.lucro)}
+                                </span>
+                              </td>
+                              <td className="px-2 py-2.5 text-center">
+                                <button onClick={() => removeEntry(e.id)} className="p-1 text-gray-300 hover:text-red-400">
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </td>
+                            </tr>
+                          )
+                        })}
                       </tbody>
                     </table>
+                    </div>
                   </div>
                 )
               })}
