@@ -193,6 +193,11 @@ function EditRow({ entry, onSave, onCancel }) {
           ? <span className={lucro >= 0 ? 'text-emerald-600' : 'text-red-500'}>{lucro >= 0 ? '+' : ''}{fmt.brl(lucro)}</span>
           : <span className="text-gray-300">—</span>}
       </td>
+      <td className="px-2 py-1.5 text-right text-xs font-semibold">
+        {f.faturado !== '' && f.gasto !== '' && Number(f.gasto) > 0
+          ? (() => { const r = Number(f.faturado) / Number(f.gasto); return <span className={r >= 1 ? 'text-emerald-600' : 'text-red-500'}>{fmt.roi(r)}</span> })()
+          : <span className="text-gray-300">—</span>}
+      </td>
       <td className="px-2 py-1.5"><input type="number" step="0.01" min="0" placeholder="CPC" className={EDIT_INPUT} value={f.custoClique} onChange={e => setF(p => ({ ...p, custoClique: e.target.value }))} /></td>
       <td className="px-2 py-1.5"><input type="number" step="0.01" min="0" placeholder="CPCo" className={EDIT_INPUT} value={f.custoCheckout} onChange={e => setF(p => ({ ...p, custoCheckout: e.target.value }))} /></td>
       <td className="px-2 py-1.5 text-right text-xs text-blue-500">
@@ -532,6 +537,7 @@ export default function OffersOverview() {
                             <th className="text-right px-3 py-2 text-gray-400 font-medium whitespace-nowrap">Gasto</th>
                             <th className="text-right px-3 py-2 text-gray-400 font-medium whitespace-nowrap">Faturado</th>
                             <th className="text-right px-3 py-2 text-gray-400 font-medium whitespace-nowrap">Lucro</th>
+                            <th className="text-right px-3 py-2 text-gray-400 font-medium whitespace-nowrap">ROI</th>
                             <th className="text-right px-3 py-2 text-gray-400 font-medium whitespace-nowrap">CPC</th>
                             <th className="text-right px-3 py-2 text-gray-400 font-medium whitespace-nowrap">CPCo</th>
                             <th className="text-right px-3 py-2 text-gray-400 font-medium whitespace-nowrap">Clique→Chk</th>
@@ -546,6 +552,7 @@ export default function OffersOverview() {
                             const cc = convCC(e)
                             const cv = convCV(e)
                             const g  = getGasto(e)
+                            const roi = (g != null && g > 0 && e.faturado != null) ? e.faturado / g : null
 
                             if (editingId === e.id) {
                               return (
@@ -566,6 +573,11 @@ export default function OffersOverview() {
                                 <td className="px-3 py-2.5 text-right">
                                   {lucro != null
                                     ? <span className={`px-1.5 py-0.5 rounded font-semibold ${lucro >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{lucro >= 0 ? '+' : ''}{fmt.brl(lucro)}</span>
+                                    : <span className="text-gray-300">—</span>}
+                                </td>
+                                <td className="px-3 py-2.5 text-right">
+                                  {roi != null
+                                    ? <span className={`px-1.5 py-0.5 rounded font-semibold ${roi >= 1 ? 'text-emerald-600' : 'text-red-500'}`}>{fmt.roi(roi)}</span>
                                     : <span className="text-gray-300">—</span>}
                                 </td>
                                 <td className="px-3 py-2.5 text-right text-gray-600">{e.custoClique != null ? fmt.brl(e.custoClique) : <span className="text-gray-300">—</span>}</td>
