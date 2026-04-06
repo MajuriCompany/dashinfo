@@ -206,10 +206,10 @@ function EditRow({ entry, onSave, onCancel }) {
           : <span className="text-gray-300">—</span>}
       </td>
       <td className="px-2 py-1.5"><input type="number" step="1" min="0" placeholder="Vendas" className={EDIT_INPUT} value={f.vendas} onChange={e => setF(p => ({ ...p, vendas: e.target.value }))} /></td>
-      <td className="px-2 py-1.5 text-center">
+      <td className="sticky right-0 bg-blue-50/80 border-l border-blue-200 px-2 py-1.5 text-center">
         <div className="flex items-center gap-1 justify-center">
-          <button onClick={() => onSave(f)} className="p-1 text-emerald-500 hover:text-emerald-700"><Check className="w-3.5 h-3.5" /></button>
-          <button onClick={onCancel} className="p-1 text-gray-400 hover:text-gray-600"><X className="w-3.5 h-3.5" /></button>
+          <button onClick={() => onSave(f)} className="p-1 rounded text-emerald-600 hover:bg-emerald-50"><Check className="w-3.5 h-3.5" /></button>
+          <button onClick={onCancel} className="p-1 rounded text-gray-400 hover:bg-gray-100"><X className="w-3.5 h-3.5" /></button>
         </div>
       </td>
     </tr>
@@ -537,7 +537,7 @@ export default function OffersOverview() {
                             <th className="text-right px-3 py-2 text-gray-400 font-medium whitespace-nowrap">Clique→Chk</th>
                             <th className="text-right px-3 py-2 text-gray-400 font-medium whitespace-nowrap">Chk→Venda</th>
                             <th className="text-right px-3 py-2 text-gray-400 font-medium whitespace-nowrap">Vendas</th>
-                            <th className="w-14" />
+                            <th className="sticky right-0 bg-gray-50 w-16 border-l border-gray-100" />
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
@@ -573,13 +573,13 @@ export default function OffersOverview() {
                                 <td className="px-3 py-2.5 text-right">{cc != null ? <span className="text-blue-600 font-medium">{cc.toFixed(1)}%</span> : <span className="text-gray-300">—</span>}</td>
                                 <td className="px-3 py-2.5 text-right">{cv != null ? <span className="text-purple-600 font-medium">{cv.toFixed(1)}%</span> : <span className="text-gray-300">—</span>}</td>
                                 <td className="px-3 py-2.5 text-right text-gray-600">{e.vendas != null ? e.vendas : <span className="text-gray-300">—</span>}</td>
-                                <td className="px-2 py-2.5 text-center">
-                                  <div className="flex items-center gap-0.5 justify-center">
-                                    <button onClick={() => setEditingId(e.id)} className="p-1 text-gray-300 hover:text-blue-400">
-                                      <Pencil className="w-3 h-3" />
+                                <td className="sticky right-0 bg-white border-l border-gray-100 px-2 py-2.5 text-center">
+                                  <div className="flex items-center gap-1 justify-center">
+                                    <button onClick={() => setEditingId(e.id)} className="p-1 rounded text-blue-400 hover:text-blue-600 hover:bg-blue-50">
+                                      <Pencil className="w-3.5 h-3.5" />
                                     </button>
-                                    <button onClick={() => removeEntry(e.id)} className="p-1 text-gray-300 hover:text-red-400">
-                                      <Trash2 className="w-3 h-3" />
+                                    <button onClick={() => removeEntry(e.id)} className="p-1 rounded text-red-400 hover:text-red-600 hover:bg-red-50">
+                                      <Trash2 className="w-3.5 h-3.5" />
                                     </button>
                                   </div>
                                 </td>
