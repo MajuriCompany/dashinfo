@@ -66,7 +66,9 @@ export default function Debug() {
         <div className="text-xs bg-gray-50 border rounded p-3 space-y-1">
           <p><strong>Meta sheet:</strong> {offer.metaSheetId} / {offer.metaTab}</p>
           <p><strong>Offer tab:</strong> {offer.resultSheetId} / {offer.resultTab}</p>
-          <p><strong>frontProduct:</strong> {offer.frontProduct || '⚠️ NÃO CONFIGURADO'}</p>
+          <p><strong>frontProduct:</strong> {
+            (Array.isArray(offer.frontProduct) ? offer.frontProduct : (offer.frontProduct ? [offer.frontProduct] : [])).filter(Boolean).join(', ') || '⚠️ NÃO CONFIGURADO'
+          }</p>
           <p><strong>metaCurrency:</strong> {offer.metaCurrency || 'USD'} | <strong>usdRate:</strong> {settings.usdRate}</p>
           <p><strong>buyersApiKey:</strong> {buyersApiKey ? '✅ configurada' : '⚠️ não configurada'}</p>
         </div>

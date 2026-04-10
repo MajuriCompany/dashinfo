@@ -151,9 +151,12 @@ export async function fetchBuyersDataByOffer(buyersApiKey, offers) {
   // Mapa: nome_produto_normalizado → { offerId, isFront }
   const productMap = {}
   offers.forEach(offer => {
-    if (offer.frontProduct) {
-      productMap[offer.frontProduct.trim().toLowerCase()] = { offerId: offer.id, isFront: true }
-    }
+    const frontProducts = Array.isArray(offer.frontProduct)
+      ? offer.frontProduct
+      : (offer.frontProduct ? offer.frontProduct.split(',').map(s => s.trim()).filter(Boolean) : [])
+    frontProducts.forEach(p => {
+      if (p) productMap[p.trim().toLowerCase()] = { offerId: offer.id, isFront: true }
+    })
     ;(offer.otherProducts || []).forEach(p => {
       if (p) productMap[p.trim().toLowerCase()] = { offerId: offer.id, isFront: false }
     })

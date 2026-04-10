@@ -85,7 +85,10 @@ export default function Settings() {
     setLoadingBuyers(true)
     const products = await fetchAllBuyersProducts(key)
     setBuyersProducts(products)
-    const allMapped = offers.flatMap(o => [o.frontProduct, ...(o.otherProducts || [])]).filter(Boolean)
+    const allMapped = offers.flatMap(o => [
+      ...(Array.isArray(o.frontProduct) ? o.frontProduct : (o.frontProduct ? [o.frontProduct] : [])),
+      ...(o.otherProducts || []),
+    ]).filter(Boolean)
     const notMapped = products.filter(p => !allMapped.some(m => m.toLowerCase() === p.toLowerCase()))
     setUnmapped(notMapped)
     setLoadingBuyers(false)
@@ -109,7 +112,10 @@ export default function Settings() {
   }
 
   function openEditForm(offer) {
-    setForm({ ...offer, otherProducts: offer.otherProducts || [] })
+    const frontProductStr = Array.isArray(offer.frontProduct)
+      ? offer.frontProduct.join(', ')
+      : (offer.frontProduct || '')
+    setForm({ ...offer, frontProduct: frontProductStr, otherProducts: offer.otherProducts || [] })
     setEditOffer(offer.id)
     setShowForm(true)
   }
@@ -118,6 +124,9 @@ export default function Settings() {
     const offer = {
       ...form,
       id: form.id || form.name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, ''),
+      frontProduct: typeof form.frontProduct === 'string'
+        ? form.frontProduct.split(',').map(s => s.trim()).filter(Boolean)
+        : (form.frontProduct || []),
       otherProducts: typeof form.otherProducts === 'string'
         ? form.otherProducts.split(',').map(s => s.trim()).filter(Boolean)
         : form.otherProducts,
@@ -343,9 +352,8 @@ export default function Settings() {
                 { key: 'resultTab',    label: 'Aba no Resultado Geral' },
                 { key: 'metaSheetId',  label: 'ID Planilha Meta Ads' },
                 { key: 'metaTab',      label: 'Aba Meta (ex: Página1)' },
-                { key: 'frontProduct', label: 'Nome do produto em "todos os compradores"' },
               ].map(({ key, label }) => (
-                <div key={key} className={key === 'frontProduct' ? 'col-span-2' : ''}>
+                <div key={key}>
                   <label className="text-gray-500 block mb-0.5">{label}</label>
                   <input
                     className="border rounded px-2 py-1 w-full text-xs"
@@ -354,6 +362,17 @@ export default function Settings() {
                   />
                 </div>
               ))}
+              <div className="col-span-2">
+                <label className="text-gray-500 block mb-0.5">
+                  Produto(s) principal(is) em "todos os compradores" (separados por vírgula)
+                </label>
+                <input
+                  className="border rounded px-2 py-1 w-full text-xs"
+                  placeholder="ex: Protocolo Libido Oculta, Protocolo Libido Oculta 2.0"
+                  value={form.frontProduct || ''}
+                  onChange={e => setForm(p => ({ ...p, frontProduct: e.target.value }))}
+                />
+              </div>
               <div className="col-span-2">
                 <label className="text-gray-500 block mb-0.5">
                   Order bumps / upsells (nomes exatos separados por vírgula)
@@ -410,8 +429,10 @@ export default function Settings() {
               <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: offer.color }} />
               <div className="min-w-0">
                 <span className="text-sm text-gray-800">{offer.name}</span>
-                {offer.frontProduct && (
-                  <span className="text-xs text-gray-400 ml-2 font-mono">"{offer.frontProduct}"</span>
+                {offer.frontProduct && (Array.isArray(offer.frontProduct) ? offer.frontProduct : [offer.frontProduct]).filter(Boolean).length > 0 && (
+                  <span className="text-xs text-gray-400 ml-2 font-mono">
+                    "{(Array.isArray(offer.frontProduct) ? offer.frontProduct : [offer.frontProduct]).join('", "')}"
+                  </span>
                 )}
               </div>
               <span className={`text-xs px-1.5 py-0.5 rounded shrink-0 ${offer.status === 'active' ? 'bg-success-light text-success' : 'bg-gray-100 text-gray-500'}`}>
