@@ -68,7 +68,7 @@ function GoalCard({ label, goal, current, fillColor, days }) {
   )
 }
 
-export default function GoalProgressBar({ current, piso, stretch }) {
+export default function GoalProgressBar({ current, piso, stretch, dailyAvg }) {
   const dias = daysLeftInCommercialMonth()
   const hasPiso    = piso    > 0
   const hasStretch = stretch > 0
@@ -81,11 +81,21 @@ export default function GoalProgressBar({ current, piso, stretch }) {
         <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest">
           Metas do Mês · Lucro Líquido
         </span>
-        <div className="flex items-center gap-3">
-          <span className="text-[11px] text-gray-400">
-            {dias} dia{dias !== 1 ? 's' : ''} restante{dias !== 1 ? 's' : ''}
-          </span>
-          <span className="text-sm font-bold text-gray-800">{fmt.brl(current)}</span>
+        <div className="flex items-center gap-3 text-right">
+          <div>
+            <div className="flex items-center gap-3 justify-end">
+              <span className="text-[11px] text-gray-400">
+                {dias} dia{dias !== 1 ? 's' : ''} restante{dias !== 1 ? 's' : ''}
+              </span>
+              <span className="text-sm font-bold text-gray-800">{fmt.brl(current)}</span>
+            </div>
+            {dailyAvg !== null && dailyAvg !== undefined && (
+              <p className="text-[11px] text-gray-400 mt-0.5">
+                Média/dia no período:{' '}
+                <span className="font-semibold text-gray-600">{fmt.brl(dailyAvg)}</span>
+              </p>
+            )}
+          </div>
         </div>
       </div>
       <div className={`grid gap-6 ${hasPiso && hasStretch ? 'grid-cols-2' : 'grid-cols-1'}`}>

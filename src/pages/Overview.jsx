@@ -141,7 +141,12 @@ export default function Overview() {
       </div>
 
       {/* ── Progresso da Meta ── */}
-      <GoalProgressBar current={monthLucroLiq} piso={metaPiso} stretch={metaStretch} />
+      <GoalProgressBar
+        current={monthLucroLiq}
+        piso={metaPiso}
+        stretch={metaStretch}
+        dailyAvg={dailyRows.length > 0 ? metrics.lucro_liquido / dailyRows.length : null}
+      />
 
       {/* ── Gráficos ── */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
