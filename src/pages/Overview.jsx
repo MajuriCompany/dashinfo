@@ -7,6 +7,7 @@ import { fmt } from '../utils/formatters'
 import { getPresetRange, getMesAtualKey, inRange } from '../utils/dateUtils'
 import { fetchAndCacheRates, makeGetRate } from '../services/exchangeRateService'
 import { useMonthlyGoals } from '../hooks/useMonthlyGoals'
+import { useManualEntries } from '../hooks/useManualEntries'
 import { RefreshContext } from '../components/Layout'
 import KPICard from '../components/KPICard'
 import DateFilter from '../components/DateFilter'
@@ -24,6 +25,7 @@ const roiClass = roi =>
 export default function Overview() {
   const { settings, apiKey, buyersApiKey, activeOffers } = useAppConfig()
   const { getGoals } = useMonthlyGoals()
+  const { entries: manualEntries, offerSettings: manualOfferSettings } = useManualEntries()
   const { data, loading, error, refresh }               = useSheetData(activeOffers, settings, apiKey, buyersApiKey)
   const { setRefreshFn }                                = useContext(RefreshContext)
   const [range, setRange] = useState(getPresetRange('mes_atual'))
@@ -48,7 +50,46 @@ export default function Overview() {
   }, [data, activeOffers, range])
 
   const allRows = useMemo(() => Object.values(filteredData).flat(), [filteredData])
-  const metrics = useMemo(() => calcMetrics(allRows, settings.aliquota), [allRows, settings.aliquota])
+  const baseMetrics = useMemo(() => calcMetrics(allRows, settings.aliquota), [allRows, settings.aliquota])
+
+  // Entradas manuais habilitadas para o dash, filtradas pelo período selecionado
+  const includedManualEntries = useMemo(() => {
+    return manualEntries.filter(e => {
+      if (!manualOfferSettings[e.offerName]?.includeInDash) return false
+      const d = new Date(e.date + 'T12:00:00')
+      return inRange(d, range.start, range.end)
+    })
+  }, [manualEntries, manualOfferSettings, range])
+
+  const manualTotals = useMemo(() => {
+    return includedManualEntries.reduce(
+      (acc, e) => {
+        const gasto    = e.gasto    ?? e.valorGasto ?? 0
+        const faturado = e.faturado ?? 0
+        acc.gasto      += gasto
+        acc.faturamento += faturado
+        acc.comissao   += faturado
+        return acc
+      },
+      { gasto: 0, faturamento: 0, comissao: 0 }
+    )
+  }, [includedManualEntries])
+
+  const metrics = useMemo(() => {
+    if (manualTotals.gasto === 0 && manualTotals.faturamento === 0) return baseMetrics
+    const gasto       = baseMetrics.gasto       + manualTotals.gasto
+    const faturamento = baseMetrics.faturamento + manualTotals.faturamento
+    const comissao    = baseMetrics.comissao    + manualTotals.comissao
+    const imposto     = faturamento * (settings.aliquota || 0)
+    const lucro_bruto   = comissao - gasto
+    const lucro_liquido = comissao - gasto - imposto
+    const roi = gasto > 0 ? comissao / gasto : null
+    const margem_bruta  = faturamento > 0 ? lucro_bruto / faturamento : null
+    const margem_liq    = faturamento > 0 ? lucro_liquido / faturamento : null
+    const margem_bruta_comissao = comissao > 0 ? lucro_bruto / comissao : null
+    const margem_liq_comissao   = comissao > 0 ? lucro_liquido / comissao : null
+    return { ...baseMetrics, gasto, faturamento, comissao, imposto, lucro_bruto, lucro_liquido, roi, margem_bruta, margem_liq, margem_bruta_comissao, margem_liq_comissao }
+  }, [baseMetrics, manualTotals, settings.aliquota])
 
   const dailyRows = useMemo(() => {
     const byDate = {}

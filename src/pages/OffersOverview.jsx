@@ -231,7 +231,7 @@ export default function OffersOverview() {
   const { settings, apiKey, buyersApiKey, activeOffers } = useAppConfig()
   const { data, productRows, loading, error, refresh }   = useSheetData(activeOffers, settings, apiKey, buyersApiKey)
   const { setRefreshFn }                                  = useContext(RefreshContext)
-  const { entries, addEntry, updateEntry, removeEntry }  = useManualEntries()
+  const { entries, addEntry, updateEntry, removeEntry, offerSettings, setOfferIncludeDash } = useManualEntries()
   const [range, setRange]           = useState(getPresetRange('mes_atual'))
   const [manualPeriod, setManualPeriod] = useState('mes_atual')
   const [form, setForm]             = useState(EMPTY_FORM)
@@ -482,12 +482,27 @@ export default function OffersOverview() {
                 const avgCC   = avg(periodForOffer.map(e => convCC(e)))
                 const avgCV   = avg(periodForOffer.map(e => convCV(e)))
 
+                const includedInDash = offerSettings[name]?.includeInDash ?? false
+
                 return (
                   <div key={name} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
                     {/* Header */}
                     <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between gap-2">
                       <h4 className="text-sm font-semibold text-gray-800">{name}</h4>
-                      <div className="flex items-center gap-2 shrink-0">
+                      <div className="flex items-center gap-3 shrink-0">
+                        {/* Toggle: incluir no dash geral */}
+                        <button
+                          onClick={() => setOfferIncludeDash(name, !includedInDash)}
+                          className={`flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full border transition-colors ${
+                            includedInDash
+                              ? 'bg-blue-600 text-white border-blue-600'
+                              : 'bg-white text-gray-400 border-gray-200 hover:border-blue-300 hover:text-blue-500'
+                          }`}
+                          title="Incluir gasto/faturado/lucro no Dash Geral"
+                        >
+                          <span className={`w-2 h-2 rounded-full ${includedInDash ? 'bg-white' : 'bg-gray-300'}`} />
+                          Dash Geral
+                        </button>
                         {periodForOffer.length > 0 && (
                           <span className={`text-xs font-bold px-2.5 py-1 rounded-lg border ${totalLucro >= 0 ? 'text-emerald-600 bg-emerald-50 border-emerald-200' : 'text-red-500 bg-red-50 border-red-200'}`}>
                             {totalLucro >= 0 ? '+' : ''}{fmt.brl(totalLucro)}
