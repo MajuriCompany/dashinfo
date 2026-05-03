@@ -1,5 +1,5 @@
-import { useState, useEffect, useContext, useMemo } from 'react'
-import { DollarSign, TrendingUp, ShoppingCart, Percent } from 'lucide-react'
+import { useState, useEffect, useContext, useMemo, useRef } from 'react'
+import { DollarSign, TrendingUp, ShoppingCart, Percent, ChevronDown, Check } from 'lucide-react'
 import { useAppConfig } from '../hooks/useAppConfig'
 import { useSheetData } from '../hooks/useSheetData'
 import { calcMetrics, signal } from '../utils/calculations'
@@ -28,8 +28,28 @@ export default function Overview() {
   const { entries: manualEntries, offerSettings: manualOfferSettings } = useManualEntries()
   const { data, loading, error, refresh }               = useSheetData(activeOffers, settings, apiKey, buyersApiKey)
   const { setRefreshFn }                                = useContext(RefreshContext)
-  const [range, setRange] = useState(getPresetRange('mes_atual'))
-  const [todayRate, setTodayRate] = useState(null)
+  const [range, setRange]             = useState(getPresetRange('mes_atual'))
+  const [todayRate, setTodayRate]     = useState(null)
+  const [selectedIds, setSelectedIds] = useState(() => new Set(activeOffers.map(o => o.id)))
+  const [dropOpen, setDropOpen]       = useState(false)
+  const dropRef                       = useRef(null)
+
+  // Sync selectedIds when offers change (add/remove)
+  useEffect(() => {
+    setSelectedIds(prev => {
+      const validIds = new Set(activeOffers.map(o => o.id))
+      const next = new Set([...prev].filter(id => validIds.has(id)))
+      return next.size ? next : validIds
+    })
+  }, [activeOffers])
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!dropOpen) return
+    function handle(e) { if (dropRef.current && !dropRef.current.contains(e.target)) setDropOpen(false) }
+    document.addEventListener('mousedown', handle)
+    return () => document.removeEventListener('mousedown', handle)
+  }, [dropOpen])
 
   useEffect(() => {
     fetchAndCacheRates().then(rates => {
@@ -41,13 +61,34 @@ export default function Overview() {
 
   useEffect(() => { setRefreshFn(() => refresh) }, [refresh, setRefreshFn])
 
+  const selectedOffers = useMemo(
+    () => activeOffers.filter(o => selectedIds.has(o.id)),
+    [activeOffers, selectedIds]
+  )
+  const allSelected = selectedOffers.length === activeOffers.length
+
+  function toggleOffer(id) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) { if (next.size > 1) next.delete(id) } else next.add(id)
+      return next
+    })
+  }
+
+  function toggleAll() {
+    setSelectedIds(allSelected
+      ? new Set([activeOffers[0]?.id].filter(Boolean))
+      : new Set(activeOffers.map(o => o.id))
+    )
+  }
+
   const filteredData = useMemo(() => {
     const result = {}
-    activeOffers.forEach(offer => {
+    selectedOffers.forEach(offer => {
       result[offer.id] = (data[offer.id] || []).filter(r => inRange(r.date, range.start, range.end))
     })
     return result
-  }, [data, activeOffers, range])
+  }, [data, selectedOffers, range])
 
   const allRows = useMemo(() => Object.values(filteredData).flat(), [filteredData])
   const baseMetrics = useMemo(() => calcMetrics(allRows, settings.aliquota), [allRows, settings.aliquota])
@@ -93,7 +134,7 @@ export default function Overview() {
 
   const dailyRows = useMemo(() => {
     const byDate = {}
-    activeOffers.forEach(offer => {
+    selectedOffers.forEach(offer => {
       ;(filteredData[offer.id] || []).forEach(r => {
         const key = r.date.toISOString().split('T')[0]
         if (!byDate[key]) byDate[key] = { date: r.date, faturamento: 0, comissao: 0, gasto: 0, lucro_bruto: 0, lucro_liquido: 0, offerLucros: {} }
@@ -108,7 +149,7 @@ export default function Overview() {
     return Object.values(byDate)
       .sort((a, b) => a.date - b.date)
       .map(r => ({ ...r, roi: r.gasto > 0 ? r.comissao / r.gasto : null }))
-  }, [filteredData, activeOffers])
+  }, [filteredData, selectedOffers])
 
   const monthRows = useMemo(() => {
     const monthRange = getPresetRange('mes_atual')
@@ -129,20 +170,77 @@ export default function Overview() {
     <div className="space-y-5">
 
       {/* ── Header ── */}
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
           <h2 className="text-xl font-bold text-gray-900">Visão Geral</h2>
           <p className="text-xs text-gray-400 mt-0.5">Resultado consolidado · todas as ofertas</p>
         </div>
-        <div
-          className="flex items-center gap-1.5 text-xs bg-white border border-gray-200 rounded-lg px-3 py-1.5 shadow-sm"
-          title="Cotação automática do fechamento anterior (AwesomeAPI)"
-        >
-          <span className="text-gray-400">USD</span>
-          <span className="font-bold text-gray-700">R$ {effectiveRate.toFixed(2)}</span>
-          {rateChanged && (
-            <span className="bg-blue-100 text-blue-600 text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase">auto</span>
-          )}
+        <div className="flex items-center gap-2 shrink-0">
+          {/* ── Filtro de ofertas ── */}
+          <div className="relative" ref={dropRef}>
+            <button
+              onClick={() => setDropOpen(p => !p)}
+              className="flex items-center gap-1.5 text-xs bg-white border border-gray-200 rounded-lg px-3 py-1.5 shadow-sm hover:border-blue-300 transition-colors"
+            >
+              <span className="flex items-center gap-1">
+                {allSelected ? (
+                  <span className="text-gray-500">Todas as ofertas</span>
+                ) : (
+                  <>
+                    {selectedOffers.map(o => (
+                      <span key={o.id} className="w-2 h-2 rounded-full" style={{ backgroundColor: o.color }} />
+                    ))}
+                    <span className="text-gray-700 font-medium">{selectedOffers.length} oferta{selectedOffers.length !== 1 ? 's' : ''}</span>
+                  </>
+                )}
+              </span>
+              <ChevronDown className={`w-3 h-3 text-gray-400 transition-transform ${dropOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {dropOpen && (
+              <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 min-w-[200px] py-1">
+                {/* Todas */}
+                <button
+                  onClick={toggleAll}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-gray-50 border-b border-gray-100"
+                >
+                  <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${allSelected ? 'bg-blue-600 border-blue-600' : 'border-gray-300'}`}>
+                    {allSelected && <Check className="w-2.5 h-2.5 text-white" />}
+                  </span>
+                  <span className="font-medium text-gray-700">Todas as ofertas</span>
+                </button>
+                {/* Por oferta */}
+                {activeOffers.map(o => {
+                  const checked = selectedIds.has(o.id)
+                  return (
+                    <button
+                      key={o.id}
+                      onClick={() => toggleOffer(o.id)}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-gray-50"
+                    >
+                      <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${checked ? 'bg-blue-600 border-blue-600' : 'border-gray-300'}`}>
+                        {checked && <Check className="w-2.5 h-2.5 text-white" />}
+                      </span>
+                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: o.color }} />
+                      <span className="text-gray-700 truncate">{o.name}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* ── Cotação USD ── */}
+          <div
+            className="flex items-center gap-1.5 text-xs bg-white border border-gray-200 rounded-lg px-3 py-1.5 shadow-sm"
+            title="Cotação automática do fechamento anterior (AwesomeAPI)"
+          >
+            <span className="text-gray-400">USD</span>
+            <span className="font-bold text-gray-700">R$ {effectiveRate.toFixed(2)}</span>
+            {rateChanged && (
+              <span className="bg-blue-100 text-blue-600 text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase">auto</span>
+            )}
+          </div>
         </div>
       </div>
 
@@ -192,8 +290,8 @@ export default function Overview() {
       {/* ── Gráficos ── */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <ProfitLineChart rows={dailyRows} />
-        <OfferBarChart   offersData={filteredData} offers={activeOffers} />
-        <OfferPieChart   offersData={filteredData} offers={activeOffers} />
+        <OfferBarChart   offersData={filteredData} offers={selectedOffers} />
+        <OfferPieChart   offersData={filteredData} offers={selectedOffers} />
       </div>
 
 {/* ── Detalhe Diário ── */}
@@ -210,7 +308,7 @@ export default function Overview() {
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
                 <th className="text-left px-4 py-2.5 text-gray-400 font-medium">Data</th>
-                {activeOffers.map(o => (
+                {selectedOffers.map(o => (
                   <th key={o.id} className="text-right px-3 py-2.5 text-gray-400 font-medium min-w-[100px]">
                     <span className="inline-flex items-center gap-1">
                       <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: o.color }} />
@@ -230,7 +328,7 @@ export default function Overview() {
               {dailyRows.map((row, i) => (
                 <tr key={i} className={`hover:bg-gray-50/80 transition-colors ${row.lucro_bruto < 0 ? 'bg-red-50/50' : ''}`}>
                   <td className="px-4 py-2.5 text-gray-600 font-medium">{fmt.date(row.date)}</td>
-                  {activeOffers.map(o => {
+                  {selectedOffers.map(o => {
                     const v = row.offerLucros?.[o.id] || 0
                     return (
                       <td key={o.id} className="px-3 py-2.5 text-right">
@@ -264,7 +362,7 @@ export default function Overview() {
             <tfoot className="bg-gray-50 border-t-2 border-gray-200 font-semibold">
               <tr>
                 <td className="px-4 py-3 text-gray-700">Total</td>
-                {activeOffers.map(o => {
+                {selectedOffers.map(o => {
                   const total = (filteredData[o.id] || []).reduce((s, r) => s + (r.lucro_bruto || 0), 0)
                   return <td key={o.id} className="px-3 py-3 text-right text-gray-700">{fmt.brl(total)}</td>
                 })}
