@@ -96,24 +96,37 @@ export default function UpsellChart({ productRows, range }) {
       </ResponsiveContainer>
 
       {/* Tabela resumo */}
-      <div className="mt-3 border-t border-gray-100 pt-3 space-y-2">
-        {data.map((p, i) => (
-          <div key={p.product} className="flex items-center gap-2 text-xs">
-            <span
-              className="w-2 h-2 rounded-full shrink-0"
-              style={{ backgroundColor: p.isFront ? COLORS[0] : COLORS[(i % (COLORS.length - 1)) + 1] }}
-            />
-            <span className="flex-1 text-gray-700 truncate" title={p.product}>{p.product}</span>
-            <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${p.isFront ? 'bg-indigo-50 text-indigo-600' : 'bg-gray-100 text-gray-500'}`}>
-              {p.isFront ? 'Front' : 'Up/Bump'}
-            </span>
-            <span className="text-gray-500 w-16 text-right">{p.vendas} vend.</span>
-            <span className="font-semibold text-indigo-600 w-10 text-right">{p.pctVendas.toFixed(1)}%</span>
-            <span className="text-gray-500 w-20 text-right">{fmt.brl(p.faturamento)}</span>
-            <span className="font-semibold text-emerald-600 w-10 text-right">{p.pctFat.toFixed(1)}%</span>
+      {(() => {
+        const frontVendas = data.find(p => p.isFront)?.vendas ?? 0
+        return (
+          <div className="mt-3 border-t border-gray-100 pt-3 space-y-2">
+            {data.map((p, i) => {
+              const txConv = !p.isFront && frontVendas > 0 ? (p.vendas / frontVendas) * 100 : null
+              return (
+                <div key={p.product} className="flex items-center gap-2 text-xs">
+                  <span
+                    className="w-2 h-2 rounded-full shrink-0"
+                    style={{ backgroundColor: p.isFront ? COLORS[0] : COLORS[(i % (COLORS.length - 1)) + 1] }}
+                  />
+                  <span className="flex-1 text-gray-700 truncate" title={p.product}>{p.product}</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${p.isFront ? 'bg-indigo-50 text-indigo-600' : 'bg-gray-100 text-gray-500'}`}>
+                    {p.isFront ? 'Front' : 'Up/Bump'}
+                  </span>
+                  {txConv != null && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-amber-50 text-amber-600 whitespace-nowrap">
+                      conv. {txConv.toFixed(1)}%
+                    </span>
+                  )}
+                  <span className="text-gray-500 w-16 text-right">{p.vendas} vend.</span>
+                  <span className="font-semibold text-indigo-600 w-10 text-right">{p.pctVendas.toFixed(1)}%</span>
+                  <span className="text-gray-500 w-20 text-right">{fmt.brl(p.faturamento)}</span>
+                  <span className="font-semibold text-emerald-600 w-10 text-right">{p.pctFat.toFixed(1)}%</span>
+                </div>
+              )
+            })}
           </div>
-        ))}
-      </div>
+        )
+      })()}
     </div>
   )
 }
