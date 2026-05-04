@@ -10,7 +10,7 @@ import { RefreshContext } from '../components/Layout'
 import DateFilter from '../components/DateFilter'
 import { Spinner, NoApiKey, ErrorState } from '../components/LoadingState'
 import KPICard from '../components/KPICard'
-import { TrendingUp, ShoppingCart, DollarSign, Percent, Plus, Trash2, Pencil, Check, X } from 'lucide-react'
+import { TrendingUp, ShoppingCart, DollarSign, Percent, Plus, Trash2, Pencil, Check, X, ChevronDown, ChevronUp } from 'lucide-react'
 import { useManualEntries } from '../hooks/useManualEntries'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -148,6 +148,7 @@ const MANUAL_PRESETS = [
   { key: 'tudo',         label: 'Tudo' },
   { key: 'mes_atual',    label: 'Mês atual' },
   { key: 'mes_anterior', label: 'Mês anterior' },
+  { key: 'last_7',       label: 'Últ. 7d' },
   { key: 'last_30',      label: 'Últ. 30d' },
 ]
 
@@ -157,10 +158,14 @@ function getManualRange(key) {
     const today = new Date()
     let m = today.getMonth() - 1, y = today.getFullYear()
     if (m < 0) { m = 11; y-- }
-    // mês comercial anterior: dia 3 até dia 2
     const s = new Date(y, m, 3)
     const e = new Date(y, m + 1, 2, 23, 59, 59)
     return { start: s, end: e }
+  }
+  if (key === 'last_7') {
+    const end   = new Date(); end.setHours(23, 59, 59, 999)
+    const start = new Date(); start.setDate(start.getDate() - 6); start.setHours(0, 0, 0, 0)
+    return { start, end }
   }
   return getPresetRange(key)
 }
@@ -237,6 +242,7 @@ export default function OffersOverview() {
   const [manualPeriod, setManualPeriod] = useState('mes_atual')
   const [form, setForm]             = useState(EMPTY_FORM)
   const [editingId, setEditingId]   = useState(null)
+  const [expandedOffers, setExpandedOffers] = useState(new Set())
   const [currency, setCurrency]     = useState('BRL')
   const [usdRate, setUsdRate]       = useState(() => settings.usdRate)
   const gastoRef = useRef(null)
@@ -597,78 +603,102 @@ export default function OffersOverview() {
                     )}
 
                     {/* Tabela de dias */}
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-xs">
-                        <thead className="bg-gray-50 border-b border-gray-100">
-                          <tr>
-                            <th className="text-left px-3 py-2 text-gray-400 font-medium whitespace-nowrap">Data</th>
-                            <th className="text-right px-3 py-2 text-gray-400 font-medium whitespace-nowrap">Gasto</th>
-                            <th className="text-right px-3 py-2 text-gray-400 font-medium whitespace-nowrap">Faturado</th>
-                            <th className="text-right px-3 py-2 text-gray-400 font-medium whitespace-nowrap">Lucro</th>
-                            <th className="text-right px-3 py-2 text-gray-400 font-medium whitespace-nowrap">ROI</th>
-                            <th className="text-right px-3 py-2 text-gray-400 font-medium whitespace-nowrap">CPC</th>
-                            <th className="text-right px-3 py-2 text-gray-400 font-medium whitespace-nowrap">CPCo</th>
-                            <th className="text-right px-3 py-2 text-gray-400 font-medium whitespace-nowrap">Clique→Chk</th>
-                            <th className="text-right px-3 py-2 text-gray-400 font-medium whitespace-nowrap">Chk→Venda</th>
-                            <th className="text-right px-3 py-2 text-gray-400 font-medium whitespace-nowrap">Vendas</th>
-                            <th className="sticky right-0 bg-gray-50 w-16 border-l border-gray-100" />
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-50">
-                          {allForOffer.map(e => {
-                            const lucro = getLucro(e)
-                            const cc = convCC(e)
-                            const cv = convCV(e)
-                            const g  = getGasto(e)
-                            const roi = (g != null && g > 0 && e.faturado != null) ? e.faturado / g : null
+                    {(() => {
+                      const isExpanded = expandedOffers.has(name)
+                      const visibleRows = isExpanded ? allForOffer : allForOffer.slice(0, 7)
+                      const hiddenCount = allForOffer.length - 7
 
-                            if (editingId === e.id) {
-                              return (
-                                <EditRow
-                                  key={e.id}
-                                  entry={e}
-                                  onSave={fields => { updateEntry(e.id, fields); setEditingId(null) }}
-                                  onCancel={() => setEditingId(null)}
-                                />
-                              )
-                            }
-
-                            return (
-                              <tr key={e.id} className="hover:bg-gray-50/80">
-                                <td className="px-3 py-2.5 text-gray-600 font-medium whitespace-nowrap">{e.date}</td>
-                                <td className="px-3 py-2.5 text-right text-gray-600">{g != null ? fmt.brl(g) : <span className="text-gray-300">—</span>}</td>
-                                <td className="px-3 py-2.5 text-right text-gray-600">{e.faturado != null ? fmt.brl(e.faturado) : <span className="text-gray-300">—</span>}</td>
-                                <td className="px-3 py-2.5 text-right">
-                                  {lucro != null
-                                    ? <span className={`px-1.5 py-0.5 rounded font-semibold ${lucro >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{lucro >= 0 ? '+' : ''}{fmt.brl(lucro)}</span>
-                                    : <span className="text-gray-300">—</span>}
-                                </td>
-                                <td className="px-3 py-2.5 text-right">
-                                  {roi != null
-                                    ? <span className={`px-1.5 py-0.5 rounded font-semibold ${roi >= 1 ? 'text-emerald-600' : 'text-red-500'}`}>{fmt.roi(roi)}</span>
-                                    : <span className="text-gray-300">—</span>}
-                                </td>
-                                <td className="px-3 py-2.5 text-right text-gray-600">{e.custoClique != null ? fmt.brl(e.custoClique) : <span className="text-gray-300">—</span>}</td>
-                                <td className="px-3 py-2.5 text-right text-gray-600">{e.custoCheckout != null ? fmt.brl(e.custoCheckout) : <span className="text-gray-300">—</span>}</td>
-                                <td className="px-3 py-2.5 text-right">{cc != null ? <span className="text-blue-600 font-medium">{cc.toFixed(1)}%</span> : <span className="text-gray-300">—</span>}</td>
-                                <td className="px-3 py-2.5 text-right">{cv != null ? <span className="text-purple-600 font-medium">{cv.toFixed(1)}%</span> : <span className="text-gray-300">—</span>}</td>
-                                <td className="px-3 py-2.5 text-right text-gray-600">{e.vendas != null ? e.vendas : <span className="text-gray-300">—</span>}</td>
-                                <td className="sticky right-0 bg-white border-l border-gray-100 px-2 py-2.5 text-center">
-                                  <div className="flex items-center gap-1 justify-center">
-                                    <button onClick={() => setEditingId(e.id)} className="p-1 rounded text-blue-400 hover:text-blue-600 hover:bg-blue-50">
-                                      <Pencil className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button onClick={() => removeEntry(e.id)} className="p-1 rounded text-red-400 hover:text-red-600 hover:bg-red-50">
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
-                                </td>
+                      return (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-xs">
+                            <thead className="bg-gray-50 border-b border-gray-100">
+                              <tr>
+                                <th className="text-left px-3 py-2 text-gray-400 font-medium whitespace-nowrap">Data</th>
+                                <th className="text-right px-3 py-2 text-gray-400 font-medium whitespace-nowrap">Gasto</th>
+                                <th className="text-right px-3 py-2 text-gray-400 font-medium whitespace-nowrap">Faturado</th>
+                                <th className="text-right px-3 py-2 text-gray-400 font-medium whitespace-nowrap">Lucro</th>
+                                <th className="text-right px-3 py-2 text-gray-400 font-medium whitespace-nowrap">ROI</th>
+                                <th className="text-right px-3 py-2 text-gray-400 font-medium whitespace-nowrap">CPC</th>
+                                <th className="text-right px-3 py-2 text-gray-400 font-medium whitespace-nowrap">CPCo</th>
+                                <th className="text-right px-3 py-2 text-gray-400 font-medium whitespace-nowrap">Clique→Chk</th>
+                                <th className="text-right px-3 py-2 text-gray-400 font-medium whitespace-nowrap">Chk→Venda</th>
+                                <th className="text-right px-3 py-2 text-gray-400 font-medium whitespace-nowrap">Vendas</th>
+                                <th className="sticky right-0 bg-gray-50 w-16 border-l border-gray-100" />
                               </tr>
-                            )
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
+                            </thead>
+                            <tbody className="divide-y divide-gray-50">
+                              {visibleRows.map(e => {
+                                const lucro = getLucro(e)
+                                const cc = convCC(e)
+                                const cv = convCV(e)
+                                const g  = getGasto(e)
+                                const roi = (g != null && g > 0 && e.faturado != null) ? e.faturado / g : null
+
+                                if (editingId === e.id) {
+                                  return (
+                                    <EditRow
+                                      key={e.id}
+                                      entry={e}
+                                      onSave={fields => { updateEntry(e.id, fields); setEditingId(null) }}
+                                      onCancel={() => setEditingId(null)}
+                                    />
+                                  )
+                                }
+
+                                return (
+                                  <tr key={e.id} className="hover:bg-gray-50/80">
+                                    <td className="px-3 py-2.5 text-gray-600 font-medium whitespace-nowrap">{e.date}</td>
+                                    <td className="px-3 py-2.5 text-right text-gray-600">{g != null ? fmt.brl(g) : <span className="text-gray-300">—</span>}</td>
+                                    <td className="px-3 py-2.5 text-right text-gray-600">{e.faturado != null ? fmt.brl(e.faturado) : <span className="text-gray-300">—</span>}</td>
+                                    <td className="px-3 py-2.5 text-right">
+                                      {lucro != null
+                                        ? <span className={`px-1.5 py-0.5 rounded font-semibold ${lucro >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{lucro >= 0 ? '+' : ''}{fmt.brl(lucro)}</span>
+                                        : <span className="text-gray-300">—</span>}
+                                    </td>
+                                    <td className="px-3 py-2.5 text-right">
+                                      {roi != null
+                                        ? <span className={`px-1.5 py-0.5 rounded font-semibold ${roi >= 1 ? 'text-emerald-600' : 'text-red-500'}`}>{fmt.roi(roi)}</span>
+                                        : <span className="text-gray-300">—</span>}
+                                    </td>
+                                    <td className="px-3 py-2.5 text-right text-gray-600">{e.custoClique != null ? fmt.brl(e.custoClique) : <span className="text-gray-300">—</span>}</td>
+                                    <td className="px-3 py-2.5 text-right text-gray-600">{e.custoCheckout != null ? fmt.brl(e.custoCheckout) : <span className="text-gray-300">—</span>}</td>
+                                    <td className="px-3 py-2.5 text-right">{cc != null ? <span className="text-blue-600 font-medium">{cc.toFixed(1)}%</span> : <span className="text-gray-300">—</span>}</td>
+                                    <td className="px-3 py-2.5 text-right">{cv != null ? <span className="text-purple-600 font-medium">{cv.toFixed(1)}%</span> : <span className="text-gray-300">—</span>}</td>
+                                    <td className="px-3 py-2.5 text-right text-gray-600">{e.vendas != null ? e.vendas : <span className="text-gray-300">—</span>}</td>
+                                    <td className="sticky right-0 bg-white border-l border-gray-100 px-2 py-2.5 text-center">
+                                      <div className="flex items-center gap-1 justify-center">
+                                        <button onClick={() => setEditingId(e.id)} className="p-1 rounded text-blue-400 hover:text-blue-600 hover:bg-blue-50">
+                                          <Pencil className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button onClick={() => removeEntry(e.id)} className="p-1 rounded text-red-400 hover:text-red-600 hover:bg-red-50">
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )
+                              })}
+                            </tbody>
+                          </table>
+                          {/* Botão expandir/recolher */}
+                          {allForOffer.length > 7 && (
+                            <button
+                              onClick={() => setExpandedOffers(prev => {
+                                const next = new Set(prev)
+                                isExpanded ? next.delete(name) : next.add(name)
+                                return next
+                              })}
+                              className="w-full flex items-center justify-center gap-1.5 py-2 text-xs text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors border-t border-gray-100"
+                            >
+                              {isExpanded
+                                ? <><ChevronUp className="w-3.5 h-3.5" /> Recolher</>
+                                : <><ChevronDown className="w-3.5 h-3.5" /> Ver todos ({hiddenCount} dias ocultos)</>
+                              }
+                            </button>
+                          )}
+                        </div>
+                      )
+                    })()}
                   </div>
                 )
               })}
