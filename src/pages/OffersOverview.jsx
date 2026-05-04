@@ -539,7 +539,13 @@ export default function OffersOverview() {
                 const avgCPC  = avg(periodForOffer.map(e => e.custoClique))
                 const avgCPCo = avg(periodForOffer.map(e => e.custoCheckout))
                 const avgCC   = avg(periodForOffer.map(e => convCC(e)))
-                const avgCV   = avg(periodForOffer.map(e => convCV(e)))
+
+                // Chk→Venda correto: soma total de checkouts (gasto/CPCo) e divide pelas vendas totais
+                const totalChk = periodForOffer.reduce((s, e) => {
+                  const g = getGasto(e), cpo = e.custoCheckout
+                  return (g && cpo && cpo > 0) ? s + g / cpo : s
+                }, 0)
+                const avgCV = totalChk > 0 && totalVendas > 0 ? (totalVendas / totalChk) * 100 : null
 
                 const includedInDash = offerSettings[name]?.includeInDash ?? false
 
