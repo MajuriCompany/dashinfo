@@ -2,6 +2,7 @@ import { useState, useContext, useMemo, useEffect, useRef } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { useAppConfig } from '../hooks/useAppConfig'
 import { useSheetData } from '../hooks/useSheetData'
+import { fetchAndCacheRates, makeGetRate } from '../services/exchangeRateService'
 import { calcMetrics, signal } from '../utils/calculations'
 import { fmt } from '../utils/formatters'
 import { getPresetRange, inRange } from '../utils/dateUtils'
@@ -236,9 +237,18 @@ export default function OffersOverview() {
   const [manualPeriod, setManualPeriod] = useState('mes_atual')
   const [form, setForm]             = useState(EMPTY_FORM)
   const [editingId, setEditingId]   = useState(null)
+  const [currency, setCurrency]     = useState('BRL')
+  const [usdRate, setUsdRate]       = useState(() => settings.usdRate)
   const gastoRef = useRef(null)
 
   useEffect(() => { setRefreshFn(() => refresh) }, [refresh, setRefreshFn])
+
+  useEffect(() => {
+    fetchAndCacheRates().then(rates => {
+      const getRateForDate = makeGetRate(rates, settings.usdRate)
+      setUsdRate(getRateForDate(new Date().toISOString().split('T')[0]))
+    })
+  }, [settings.usdRate])
 
   const filteredData = useMemo(() => {
     const result = {}
@@ -260,22 +270,29 @@ export default function OffersOverview() {
       .sort((a, b) => b.date.localeCompare(a.date))
   }, [entries, manualRange])
 
-  const previewLucro = form.faturado !== '' && form.gasto !== ''
-    ? Number(form.faturado) - Number(form.gasto)
-    : null
+  const toReal = v => currency === 'USD' ? Number(v) * usdRate : Number(v)
+
+  const gastoReal    = form.gasto    !== '' ? toReal(form.gasto)    : null
+  const faturadoReal = form.faturado !== '' ? toReal(form.faturado) : null
+  const previewLucro = gastoReal != null && faturadoReal != null ? faturadoReal - gastoReal : null
 
   const previewCC = form.custoClique && form.custoCheckout && Number(form.custoCheckout) > 0
     ? (Number(form.custoClique) / Number(form.custoCheckout)) * 100
     : null
 
   const previewCV = form.vendas && form.gasto && form.custoCheckout && Number(form.gasto) > 0 && Number(form.custoCheckout) > 0
-    ? (Number(form.vendas) / (Number(form.gasto) / Number(form.custoCheckout))) * 100
+    ? (Number(form.vendas) / (toReal(form.gasto) / Number(form.custoCheckout))) * 100
     : null
 
   function handleAdd(ev) {
     ev.preventDefault()
     if (!form.date || !form.offerName) return
-    addEntry({ ...form, offerName: form.offerName.trim() })
+    addEntry({
+      ...form,
+      offerName: form.offerName.trim(),
+      gasto:    form.gasto    !== '' ? toReal(form.gasto)    : '',
+      faturado: form.faturado !== '' ? toReal(form.faturado) : '',
+    })
     setForm({ ...EMPTY_FORM, date: form.date, offerName: form.offerName })
     gastoRef.current?.focus()
   }
@@ -364,32 +381,68 @@ export default function OffersOverview() {
 
             {/* Linha 2: financeiro */}
             <div className="flex flex-wrap gap-2 items-end">
+              {/* Toggle de moeda */}
+              <div className="flex flex-col justify-end">
+                <label className="text-[11px] text-gray-400 block mb-1">Moeda</label>
+                <div className="flex border border-gray-200 rounded-lg overflow-hidden text-xs font-semibold">
+                  <button
+                    type="button"
+                    onClick={() => setCurrency('BRL')}
+                    className={`px-3 py-2 transition-colors ${currency === 'BRL' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
+                  >
+                    R$
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCurrency('USD')}
+                    className={`px-3 py-2 transition-colors ${currency === 'USD' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
+                  >
+                    USD$
+                  </button>
+                </div>
+              </div>
+
               <div>
-                <label className="text-[11px] text-gray-400 block mb-1">Gasto (R$)</label>
+                <label className="text-[11px] text-gray-400 block mb-1">
+                  Gasto {currency === 'USD' ? '(USD$)' : '(R$)'}
+                </label>
                 <input
                   ref={gastoRef}
                   type="number" step="0.01" min="0"
-                  placeholder="ex: 300,00"
+                  placeholder={currency === 'USD' ? 'ex: 60.00' : 'ex: 300,00'}
                   className="border border-gray-200 rounded-lg px-3 py-2 text-sm w-32 focus:outline-none focus:border-blue-400"
                   value={form.gasto}
                   onChange={e => setForm(p => ({ ...p, gasto: e.target.value }))}
                 />
+                {currency === 'USD' && form.gasto !== '' && (
+                  <p className="text-[10px] text-gray-400 mt-0.5">≈ {fmt.brl(toReal(form.gasto))}</p>
+                )}
               </div>
+
               <div>
-                <label className="text-[11px] text-gray-400 block mb-1">Faturado (R$)</label>
+                <label className="text-[11px] text-gray-400 block mb-1">
+                  Faturado {currency === 'USD' ? '(USD$)' : '(R$)'}
+                </label>
                 <input
                   type="number" step="0.01" min="0"
-                  placeholder="ex: 650,00"
+                  placeholder={currency === 'USD' ? 'ex: 130.00' : 'ex: 650,00'}
                   className="border border-gray-200 rounded-lg px-3 py-2 text-sm w-32 focus:outline-none focus:border-blue-400"
                   value={form.faturado}
                   onChange={e => setForm(p => ({ ...p, faturado: e.target.value }))}
                 />
+                {currency === 'USD' && form.faturado !== '' && (
+                  <p className="text-[10px] text-gray-400 mt-0.5">≈ {fmt.brl(toReal(form.faturado))}</p>
+                )}
               </div>
+
               {previewLucro != null && (
-                <div className="flex items-end pb-2">
+                <div className="flex flex-col items-start pb-2">
                   <span className={`text-sm font-bold px-3 py-1.5 rounded-lg border ${previewLucro >= 0 ? 'text-emerald-600 bg-emerald-50 border-emerald-200' : 'text-red-500 bg-red-50 border-red-200'}`}>
                     Lucro: {previewLucro >= 0 ? '+' : ''}{fmt.brl(previewLucro)}
                   </span>
+                  {currency === 'USD' && (
+                    <p className="text-[10px] text-gray-400 mt-1 px-1">cotação: R$ {usdRate.toFixed(2)}</p>
+                  )}
                 </div>
               )}
             </div>
