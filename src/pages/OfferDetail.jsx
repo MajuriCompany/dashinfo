@@ -10,11 +10,12 @@ import KPICard from '../components/KPICard'
 import DateFilter from '../components/DateFilter'
 import ProfitLineChart from '../components/charts/ProfitLineChart'
 import ROIChart from '../components/charts/ROIChart'
+import UpsellChart from '../components/charts/UpsellChart'
 import { Spinner, NoApiKey, ErrorState, EmptyState } from '../components/LoadingState'
 
 export default function OfferDetail() {
   const { settings, activeOffers, apiKey, buyersApiKey } = useAppConfig()
-  const { data, loading, error, refresh }               = useSheetData(activeOffers, settings, apiKey, buyersApiKey)
+  const { data, productRows, loading, error, refresh }  = useSheetData(activeOffers, settings, apiKey, buyersApiKey)
   const { setRefreshFn }                                = useContext(RefreshContext)
   const [selectedId, setSelectedId]                     = useState(activeOffers[0]?.id || '')
   const [range, setRange]                               = useState(getPresetRange('mes_atual'))
@@ -104,6 +105,10 @@ export default function OfferDetail() {
         <ProfitLineChart rows={rows} />
         <ROIChart rows={rows} />
       </div>
+
+      {(productRows[selectedId]?.length > 0) && (
+        <UpsellChart productRows={productRows[selectedId]} range={range} />
+      )}
 
       {rows.length === 0 ? <EmptyState /> : (
         <div className="bg-white rounded-lg shadow-sm overflow-x-auto">
