@@ -32,7 +32,9 @@ export async function fetchAndCacheRates() {
   }
 
   try {
-    const res  = await fetch(API_URL)
+    const ctrl = new AbortController()
+    const id   = setTimeout(() => ctrl.abort(), 8000)
+    const res  = await fetch(API_URL, { signal: ctrl.signal }).finally(() => clearTimeout(id))
     if (!res.ok) throw new Error(`AwesomeAPI ${res.status}`)
     const json = await res.json()
 
