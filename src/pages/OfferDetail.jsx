@@ -14,15 +14,15 @@ import UpsellChart from '../components/charts/UpsellChart'
 import { Spinner, NoApiKey, ErrorState, EmptyState } from '../components/LoadingState'
 
 export default function OfferDetail() {
-  const { settings, activeOffers, apiKey, buyersApiKey } = useAppConfig()
-  const { data, productRows, loading, error, refresh }  = useSheetData(activeOffers, settings, apiKey, buyersApiKey)
-  const { setRefreshFn }                                = useContext(RefreshContext)
-  const [selectedId, setSelectedId]                     = useState(activeOffers[0]?.id || '')
-  const [range, setRange]                               = useState(getPresetRange('mes_atual'))
+  const { settings, trackedOffers, apiKey, buyersApiKey } = useAppConfig()
+  const { data, productRows, loading, error, refresh }   = useSheetData(trackedOffers, settings, apiKey, buyersApiKey)
+  const { setRefreshFn }                                 = useContext(RefreshContext)
+  const [selectedId, setSelectedId]                      = useState(trackedOffers[0]?.id || '')
+  const [range, setRange]                                = useState(getPresetRange('mes_atual'))
 
   useEffect(() => { setRefreshFn(() => refresh) }, [refresh, setRefreshFn])
 
-  const offer = activeOffers.find(o => o.id === selectedId)
+  const offer = trackedOffers.find(o => o.id === selectedId)
 
   const rows = useMemo(() => {
     return (data[selectedId] || []).filter(r => inRange(r.date, range.start, range.end))
@@ -43,8 +43,10 @@ export default function OfferDetail() {
           onChange={e => setSelectedId(e.target.value)}
           className="border rounded px-3 py-1 text-sm"
         >
-          {activeOffers.map(o => (
-            <option key={o.id} value={o.id}>{o.name}</option>
+          {trackedOffers.map(o => (
+            <option key={o.id} value={o.id}>
+              {o.name}{o.status === 'testing' ? ' (em teste)' : ''}
+            </option>
           ))}
         </select>
         {offer && (

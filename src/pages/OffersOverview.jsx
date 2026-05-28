@@ -118,6 +118,11 @@ function OfferCard({ offer, rows, productRows, range, aliquota }) {
       <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
         <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: offer.color }} />
         <h3 className="text-sm font-bold text-gray-800 truncate">{offer.name}</h3>
+        {offer.status === 'testing' && (
+          <span className="ml-auto shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-600 border border-amber-200">
+            Em teste
+          </span>
+        )}
       </div>
       <div className="p-4 space-y-4">
         <div className="grid grid-cols-3 gap-2">
@@ -231,10 +236,10 @@ function EditRow({ entry, onSave, onCancel }) {
 
 const todayStr = () => new Date().toISOString().split('T')[0]
 
-const EMPTY_FORM = { date: todayStr(), offerName: '', custoClique: '', custoCheckout: '', vendas: '', gasto: '', faturado: '' }
+const EMPTY_FORM = { date: todayStr(), offerName: '', custoClique: '', custoCheckout: '', vendas: '', gasto: '', faturado: '', includeDash: false }
 
 export default function OffersOverview() {
-  const { settings, apiKey, buyersApiKey, activeOffers } = useAppConfig()
+  const { settings, apiKey, buyersApiKey, trackedOffers: activeOffers } = useAppConfig()
   const { data, productRows, loading, error, refresh }   = useSheetData(activeOffers, settings, apiKey, buyersApiKey)
   const { setRefreshFn }                                  = useContext(RefreshContext)
   const { entries, addEntry, updateEntry, removeEntry, offerSettings, setOfferIncludeDash } = useManualEntries()
@@ -293,13 +298,15 @@ export default function OffersOverview() {
   function handleAdd(ev) {
     ev.preventDefault()
     if (!form.date || !form.offerName) return
+    const offerName = form.offerName.trim()
     addEntry({
       ...form,
-      offerName: form.offerName.trim(),
+      offerName,
       gasto:    form.gasto    !== '' ? toReal(form.gasto)    : '',
       faturado: form.faturado !== '' ? toReal(form.faturado) : '',
     })
-    setForm({ ...EMPTY_FORM, date: form.date, offerName: form.offerName })
+    setOfferIncludeDash(offerName, form.includeDash)
+    setForm({ ...EMPTY_FORM, date: form.date, offerName: form.offerName, includeDash: form.includeDash })
     gastoRef.current?.focus()
   }
 
@@ -373,7 +380,15 @@ export default function OffersOverview() {
                   placeholder="ex: El Método del Vínculo"
                   className="border border-gray-200 rounded-lg px-3 py-2 text-sm w-full focus:outline-none focus:border-blue-400"
                   value={form.offerName}
-                  onChange={e => setForm(p => ({ ...p, offerName: e.target.value }))}
+                  onChange={e => {
+                    const name = e.target.value
+                    const existing = offerSettings[name]
+                    setForm(p => ({
+                      ...p,
+                      offerName: name,
+                      includeDash: existing !== undefined ? (existing.includeInDash ?? false) : p.includeDash,
+                    }))
+                  }}
                   list="offer-names-list"
                   required
                 />
@@ -382,6 +397,24 @@ export default function OffersOverview() {
                     <option key={n} value={n} />
                   ))}
                 </datalist>
+              </div>
+
+              {/* Toggle: contar no Dash Geral */}
+              <div className="flex flex-col justify-end">
+                <label className="text-[11px] text-gray-400 block mb-1">Contar no Dash Geral?</label>
+                <button
+                  type="button"
+                  onClick={() => setForm(p => ({ ...p, includeDash: !p.includeDash }))}
+                  className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border transition-colors ${
+                    form.includeDash
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-white text-gray-400 border-gray-200 hover:border-blue-300 hover:text-blue-500'
+                  }`}
+                  title="Se ativo, gasto/faturado/lucro desta oferta entram nos totais da Visão Geral"
+                >
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${form.includeDash ? 'bg-white' : 'bg-gray-300'}`} />
+                  {form.includeDash ? 'Sim — conta' : 'Não — só tracking'}
+                </button>
               </div>
             </div>
 

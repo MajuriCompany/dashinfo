@@ -91,6 +91,7 @@ export function useAppConfig() {
     updateOffer,
     removeOffer,
     resetDefaults,
-    activeOffers: useMemo(() => offers.filter(o => o.status === 'active'), [offers]),
+    activeOffers:  useMemo(() => offers.filter(o => o.status === 'active'),           [offers]),
+    trackedOffers: useMemo(() => offers.filter(o => o.status !== 'paused'),           [offers]),
   }
 }

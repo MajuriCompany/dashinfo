@@ -412,6 +412,7 @@ export default function Settings() {
                   onChange={e => setForm(p => ({ ...p, status: e.target.value }))}
                 >
                   <option value="active">Ativa</option>
+                  <option value="testing">Em teste</option>
                   <option value="paused">Pausada</option>
                 </select>
               </div>
@@ -435,8 +436,12 @@ export default function Settings() {
                   </span>
                 )}
               </div>
-              <span className={`text-xs px-1.5 py-0.5 rounded shrink-0 ${offer.status === 'active' ? 'bg-success-light text-success' : 'bg-gray-100 text-gray-500'}`}>
-                {offer.status === 'active' ? 'Ativa' : 'Pausada'}
+              <span className={`text-xs px-1.5 py-0.5 rounded shrink-0 ${
+                offer.status === 'active'  ? 'bg-success-light text-success' :
+                offer.status === 'testing' ? 'bg-amber-100 text-amber-600'   :
+                                             'bg-gray-100 text-gray-500'
+              }`}>
+                {offer.status === 'active' ? 'Ativa' : offer.status === 'testing' ? 'Em teste' : 'Pausada'}
               </span>
             </div>
             <div className="flex items-center gap-2 shrink-0">
@@ -446,6 +451,7 @@ export default function Settings() {
               <button
                 onClick={() => updateOffer(offer.id, { status: offer.status === 'active' ? 'paused' : 'active' })}
                 className="p-1 text-gray-400 hover:text-gray-700"
+                title={offer.status === 'active' ? 'Pausar' : 'Ativar'}
               >
                 {offer.status === 'active' ? <PauseCircle className="w-3.5 h-3.5" /> : <PlayCircle className="w-3.5 h-3.5" />}
               </button>
