@@ -339,7 +339,7 @@ export default function OffersOverview() {
       <DateFilter onChange={setRange} />
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        {activeOffers.map(offer => (
+        {activeOffers.filter(o => (filteredData[o.id] || []).length > 0).map(offer => (
           <OfferCard
             key={offer.id}
             offer={offer}
