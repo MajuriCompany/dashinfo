@@ -23,7 +23,7 @@ const roiClass = roi =>
              'text-danger bg-danger-light border-danger'
 
 export default function Overview() {
-  const { settings, apiKey, buyersApiKey, activeOffers } = useAppConfig()
+  const { settings, apiKey, buyersApiKey, activeOffers, trackedOffers } = useAppConfig()
   const { getGoals } = useMonthlyGoals()
   const { entries: manualEntries, offerSettings: manualOfferSettings } = useManualEntries()
   const { data, loading, error, refresh }               = useSheetData(activeOffers, settings, apiKey, buyersApiKey)
@@ -89,6 +89,27 @@ export default function Overview() {
     })
     return result
   }, [data, selectedOffers, range])
+
+  // Somente ofertas que tiveram resultado no período filtrado
+  const offersWithResults = useMemo(
+    () => selectedOffers.filter(o => (filteredData[o.id] || []).length > 0),
+    [selectedOffers, filteredData]
+  )
+
+  // Contador de ofertas novas no mês calendário atual
+  const { coelhoCount, jnTesteCount } = useMemo(() => {
+    const now = new Date()
+    const y = now.getFullYear(), m = now.getMonth()
+    let coelhoCount = 0, jnTesteCount = 0
+    trackedOffers.forEach(o => {
+      if (!o.createdAt) return
+      const d = new Date(o.createdAt)
+      if (d.getFullYear() !== y || d.getMonth() !== m) return
+      if (o.status === 'active')   coelhoCount++
+      if (o.status === 'testing')  jnTesteCount++
+    })
+    return { coelhoCount, jnTesteCount }
+  }, [trackedOffers])
 
   const allRows = useMemo(() => Object.values(filteredData).flat(), [filteredData])
   const baseMetrics = useMemo(() => calcMetrics(allRows, settings.aliquota), [allRows, settings.aliquota])
@@ -173,7 +194,24 @@ export default function Overview() {
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <h2 className="text-xl font-bold text-gray-900">Visão Geral</h2>
-          <p className="text-xs text-gray-400 mt-0.5">Resultado consolidado · todas as ofertas</p>
+          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+            <p className="text-xs text-gray-400">Resultado consolidado · todas as ofertas</p>
+            {(coelhoCount > 0 || jnTesteCount > 0) && (
+              <span className="flex items-center gap-1.5">
+                <span className="text-[10px] text-gray-400">novas este mês:</span>
+                {coelhoCount > 0 && (
+                  <span className="text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded-full">
+                    {coelhoCount} coelho
+                  </span>
+                )}
+                {jnTesteCount > 0 && (
+                  <span className="text-[10px] font-semibold bg-orange-50 text-orange-700 border border-orange-200 px-1.5 py-0.5 rounded-full">
+                    {jnTesteCount} JN Teste
+                  </span>
+                )}
+              </span>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {/* ── Filtro de ofertas ── */}
@@ -290,8 +328,8 @@ export default function Overview() {
       {/* ── Gráficos ── */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <ProfitLineChart rows={dailyRows} />
-        <OfferBarChart   offersData={filteredData} offers={selectedOffers} />
-        <OfferPieChart   offersData={filteredData} offers={selectedOffers} />
+        <OfferBarChart   offersData={filteredData} offers={offersWithResults} />
+        <OfferPieChart   offersData={filteredData} offers={offersWithResults} />
       </div>
 
 {/* ── Detalhe Diário ── */}
@@ -308,7 +346,7 @@ export default function Overview() {
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
                 <th className="text-left px-4 py-2.5 text-gray-400 font-medium">Data</th>
-                {selectedOffers.map(o => (
+                {offersWithResults.map(o => (
                   <th key={o.id} className="text-right px-3 py-2.5 text-gray-400 font-medium min-w-[100px]">
                     <span className="inline-flex items-center gap-1">
                       <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: o.color }} />
@@ -328,7 +366,7 @@ export default function Overview() {
               {dailyRows.map((row, i) => (
                 <tr key={i} className={`hover:bg-gray-50/80 transition-colors ${row.lucro_bruto < 0 ? 'bg-red-50/50' : ''}`}>
                   <td className="px-4 py-2.5 text-gray-600 font-medium">{fmt.date(row.date)}</td>
-                  {selectedOffers.map(o => {
+                  {offersWithResults.map(o => {
                     const v = row.offerLucros?.[o.id] || 0
                     return (
                       <td key={o.id} className="px-3 py-2.5 text-right">
@@ -362,7 +400,7 @@ export default function Overview() {
             <tfoot className="bg-gray-50 border-t-2 border-gray-200 font-semibold">
               <tr>
                 <td className="px-4 py-3 text-gray-700">Total</td>
-                {selectedOffers.map(o => {
+                {offersWithResults.map(o => {
                   const total = (filteredData[o.id] || []).reduce((s, r) => s + (r.lucro_bruto || 0), 0)
                   return <td key={o.id} className="px-3 py-3 text-right text-gray-700">{fmt.brl(total)}</td>
                 })}

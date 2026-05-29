@@ -132,7 +132,7 @@ export default function Settings() {
         : form.otherProducts,
     }
     if (editOffer) updateOffer(editOffer, offer)
-    else addOffer(offer)
+    else addOffer({ ...offer, createdAt: new Date().toISOString() })
     setShowForm(false)
   }
 
