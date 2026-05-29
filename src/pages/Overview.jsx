@@ -96,20 +96,18 @@ export default function Overview() {
     [selectedOffers, filteredData]
   )
 
-  // Contador de ofertas novas no mês calendário atual
+  // Contador de ofertas novas no período filtrado
   const { coelhoCount, jnTesteCount } = useMemo(() => {
-    const now = new Date()
-    const y = now.getFullYear(), m = now.getMonth()
     let coelhoCount = 0, jnTesteCount = 0
     trackedOffers.forEach(o => {
       if (!o.createdAt) return
       const d = new Date(o.createdAt)
-      if (d.getFullYear() !== y || d.getMonth() !== m) return
+      if (!inRange(d, range.start, range.end)) return
       if (o.status === 'active')   coelhoCount++
       if (o.status === 'testing')  jnTesteCount++
     })
     return { coelhoCount, jnTesteCount }
-  }, [trackedOffers])
+  }, [trackedOffers, range])
 
   const allRows = useMemo(() => Object.values(filteredData).flat(), [filteredData])
   const baseMetrics = useMemo(() => calcMetrics(allRows, settings.aliquota), [allRows, settings.aliquota])
