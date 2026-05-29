@@ -8,12 +8,13 @@ const PRESETS = [
   { key: 'mes_atual',  label: 'Mês atual' },
   { key: 'this_week',  label: 'Esta semana' },
   { key: 'last_7',     label: 'Últimos 7 dias' },
+  { key: 'last_14',    label: 'Últimos 14 dias' },
   { key: 'last_30',    label: 'Últimos 30 dias' },
   { key: 'custom',     label: 'Personalizado' },
 ]
 
 export default function DateFilter({ value, onChange }) {
-  const [active, setActive]   = useState('mes_atual')
+  const [active, setActive]   = useState('last_14')
   const [custom, setCustom]   = useState({ start: '', end: '' })
   const [showCustom, setShowCustom] = useState(false)
 

@@ -101,6 +101,8 @@ export function getPresetRange(preset) {
     }
     case 'last_7':
       return { start: new Date(today.getTime() - 6 * 86400000), end }
+    case 'last_14':
+      return { start: new Date(today.getTime() - 13 * 86400000), end }
     case 'last_30':
       return { start: new Date(today.getTime() - 29 * 86400000), end }
     case 'mes_atual': {
