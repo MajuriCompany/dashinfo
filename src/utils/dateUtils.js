@@ -114,6 +114,17 @@ export function getPresetRange(preset) {
       const e = new Date(y, m + 1, 2)
       return { start: s, end: endOfDay(e) }
     }
+    case 'mes_passado': {
+      // Mês comercial anterior: dia 3 do mês anterior ao mes_atual, até dia 2 do mes_atual
+      let y = today.getFullYear(), m = today.getMonth()
+      if (today.getDate() < 3) { m--; if (m < 0) { m = 11; y-- } }
+      // mes_atual começa em (y, m, 3) → mes_passado começa um mês antes
+      let py = y, pm = m - 1
+      if (pm < 0) { pm = 11; py-- }
+      const s = new Date(py, pm, 3)
+      const e = new Date(py, pm + 1, 2)
+      return { start: s, end: endOfDay(e) }
+    }
     default:
       return { start: new Date(today.getFullYear(), today.getMonth(), 1), end }
   }

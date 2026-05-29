@@ -5,8 +5,9 @@ import { getPresetRange } from '../utils/dateUtils'
 const PRESETS = [
   { key: 'today',      label: 'Hoje' },
   { key: 'yesterday',  label: 'Ontem' },
-  { key: 'mes_atual',  label: 'Mês atual' },
-  { key: 'this_week',  label: 'Esta semana' },
+  { key: 'mes_atual',   label: 'Mês atual' },
+  { key: 'mes_passado', label: 'Mês passado' },
+  { key: 'this_week',   label: 'Esta semana' },
   { key: 'last_7',     label: 'Últimos 7 dias' },
   { key: 'last_14',    label: 'Últimos 14 dias' },
   { key: 'last_30',    label: 'Últimos 30 dias' },
