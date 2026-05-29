@@ -100,9 +100,9 @@ export default function Overview() {
   const { coelhoCount, jnTesteCount } = useMemo(() => {
     let coelhoCount = 0, jnTesteCount = 0
     trackedOffers.forEach(o => {
-      if (!o.createdAt) return
-      const d = new Date(o.createdAt)
-      if (!inRange(d, range.start, range.end)) return
+      const ref = o.startDate ? new Date(o.startDate + 'T12:00:00') : (o.createdAt ? new Date(o.createdAt) : null)
+      if (!ref) return
+      if (!inRange(ref, range.start, range.end)) return
       if (o.status === 'active')   coelhoCount++
       if (o.status === 'testing')  jnTesteCount++
     })

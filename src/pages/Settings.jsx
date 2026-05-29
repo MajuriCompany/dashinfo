@@ -10,6 +10,7 @@ const EMPTY_OFFER = {
   id: '', name: '', status: 'active', color: '#2563eb',
   resultSheetId: '', resultTab: '', metaSheetId: '', metaTab: '',
   metaCurrency: 'USD', metaCampaignFilter: '',
+  startDate: '',
   frontProduct: '', otherProducts: [],
 }
 
@@ -413,6 +414,15 @@ export default function Settings() {
                   className="border rounded h-8 w-12"
                   value={form.color || '#2563eb'}
                   onChange={e => setForm(p => ({ ...p, color: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="text-gray-500 block mb-0.5">Data de início <span className="text-gray-400">(vazio = dia de adição)</span></label>
+                <input
+                  type="date"
+                  className="border rounded px-2 py-1 w-full text-xs"
+                  value={form.startDate || ''}
+                  onChange={e => setForm(p => ({ ...p, startDate: e.target.value }))}
                 />
               </div>
               <div>
