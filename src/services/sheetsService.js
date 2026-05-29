@@ -48,7 +48,7 @@ export async function listSheetNames(sheetId, apiKey) {
 // 3. Todos os valores estão em USD
 // 4. CPC e CPI serão calculados APÓS conversão para BRL
 // ---------------------------------------------------------------------------
-export function parseMetaRows(rawRows) {
+export function parseMetaRows(rawRows, campaignFilter = null) {
   if (!rawRows || rawRows.length < 2) return []
 
   // Linha 1 = cabeçalho (índice 0)
@@ -64,8 +64,10 @@ export function parseMetaRows(rawRows) {
   const iCheckouts = col('Checkouts Initiated')
   const iLPViews   = col('Landing Page Views')
   const iPurchases = col('Purchases')
+  const iCampaign  = col('Campaign name')
 
-  console.log(`[META] Day:${iDay} AmountSpent:${iSpent} Clicks:${iClicks} Checkouts:${iCheckouts} LPViews:${iLPViews} Purchases:${iPurchases}`)
+  console.log(`[META] Day:${iDay} AmountSpent:${iSpent} Clicks:${iClicks} Checkouts:${iCheckouts} LPViews:${iLPViews} Purchases:${iPurchases} Campaign:${iCampaign}`)
+  if (campaignFilter) console.log('[META] Filtro de campanha:', campaignFilter)
 
   if (iDay < 0 || iSpent < 0) {
     console.error('[META] ❌ Colunas "Day" ou "Amount Spent" não encontradas no cabeçalho:', header)
@@ -77,6 +79,12 @@ export function parseMetaRows(rawRows) {
   for (let i = 1; i < rawRows.length; i++) {
     const row = rawRows[i]
     if (!row || !row[iDay]) continue
+
+    // Filtro por nome de campanha (substring, case-insensitive)
+    if (campaignFilter && campaignFilter.length > 0 && iCampaign >= 0) {
+      const name = String(row[iCampaign] || '').toLowerCase()
+      if (!campaignFilter.some(f => name.includes(f))) continue
+    }
 
     const date = parseDate(row[iDay])
     if (!date || isNaN(date.getTime())) continue
@@ -288,7 +296,11 @@ export async function fetchOfferData(offer, apiKey, getRateForDate, buyersDataBy
       .catch(e => { console.error(`[OFERTA] ${offer.name}:`, e.message); return [] }),
 
     fetchRange(offer.metaSheetId, `${offer.metaTab}!A:Z`, apiKey)
-      .then(parseMetaRows)
+      .then(rows => parseMetaRows(rows,
+        offer.metaCampaignFilter
+          ? offer.metaCampaignFilter.split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
+          : null
+      ))
       .catch(e => { console.error(`[META] ${offer.name}:`, e.message); return [] }),
   ])
 

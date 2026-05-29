@@ -9,7 +9,7 @@ import DiagnosticPanel from '../components/DiagnosticPanel'
 const EMPTY_OFFER = {
   id: '', name: '', status: 'active', color: '#2563eb',
   resultSheetId: '', resultTab: '', metaSheetId: '', metaTab: '',
-  metaCurrency: 'USD',
+  metaCurrency: 'USD', metaCampaignFilter: '',
   frontProduct: '', otherProducts: [],
 }
 
@@ -362,6 +362,17 @@ export default function Settings() {
                   />
                 </div>
               ))}
+              <div className="col-span-2">
+                <label className="text-gray-500 block mb-0.5">
+                  Filtro de campanha Meta (palavras-chave separadas por vírgula)
+                </label>
+                <input
+                  className="border rounded px-2 py-1 w-full text-xs"
+                  placeholder="ex: Reconquista, VENC — vazio = sem filtro, usa tudo da aba"
+                  value={form.metaCampaignFilter || ''}
+                  onChange={e => setForm(p => ({ ...p, metaCampaignFilter: e.target.value }))}
+                />
+              </div>
               <div className="col-span-2">
                 <label className="text-gray-500 block mb-0.5">
                   Produto(s) principal(is) em "todos os compradores" (separados por vírgula)
