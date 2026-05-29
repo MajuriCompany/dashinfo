@@ -236,7 +236,7 @@ function EditRow({ entry, onSave, onCancel }) {
 
 const todayStr = () => new Date().toISOString().split('T')[0]
 
-const EMPTY_FORM = { date: todayStr(), offerName: '', custoClique: '', custoCheckout: '', vendas: '', gasto: '', faturado: '', includeDash: false }
+const EMPTY_FORM = { date: todayStr(), offerName: '', custoClique: '', custoCheckout: '', vendas: '', gasto: '', faturado: '' }
 
 export default function OffersOverview() {
   const { settings, apiKey, buyersApiKey, trackedOffers: activeOffers } = useAppConfig()
@@ -305,8 +305,7 @@ export default function OffersOverview() {
       gasto:    form.gasto    !== '' ? toReal(form.gasto)    : '',
       faturado: form.faturado !== '' ? toReal(form.faturado) : '',
     })
-    setOfferIncludeDash(offerName, form.includeDash)
-    setForm({ ...EMPTY_FORM, date: form.date, offerName: form.offerName, includeDash: form.includeDash })
+    setForm({ ...EMPTY_FORM, date: form.date, offerName: form.offerName })
     gastoRef.current?.focus()
   }
 
@@ -382,11 +381,9 @@ export default function OffersOverview() {
                   value={form.offerName}
                   onChange={e => {
                     const name = e.target.value
-                    const existing = offerSettings[name]
                     setForm(p => ({
                       ...p,
                       offerName: name,
-                      includeDash: existing !== undefined ? (existing.includeInDash ?? false) : p.includeDash,
                     }))
                   }}
                   list="offer-names-list"
@@ -399,23 +396,6 @@ export default function OffersOverview() {
                 </datalist>
               </div>
 
-              {/* Toggle: contar no Dash Geral */}
-              <div className="flex flex-col justify-end">
-                <label className="text-[11px] text-gray-400 block mb-1">Contar no Dash Geral?</label>
-                <button
-                  type="button"
-                  onClick={() => setForm(p => ({ ...p, includeDash: !p.includeDash }))}
-                  className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border transition-colors ${
-                    form.includeDash
-                      ? 'bg-blue-600 text-white border-blue-600'
-                      : 'bg-white text-gray-400 border-gray-200 hover:border-blue-300 hover:text-blue-500'
-                  }`}
-                  title="Se ativo, gasto/faturado/lucro desta oferta entram nos totais da Visão Geral"
-                >
-                  <span className={`w-2 h-2 rounded-full shrink-0 ${form.includeDash ? 'bg-white' : 'bg-gray-300'}`} />
-                  {form.includeDash ? 'Sim — conta' : 'Não — só tracking'}
-                </button>
-              </div>
             </div>
 
             {/* Linha 2: financeiro */}
