@@ -283,22 +283,13 @@ function SummaryLabelEditor({ labels, onUpdate, onAdd, onRemove }) {
 
 function MonthlySummary({ summaries, updateSummary, summaryLabels, updateSummaryLabel, addSummaryLabel, removeSummaryLabel, currentWeekKey, todayStr }) {
   const today = useMemo(() => new Date(), [])
-  const [monthOffset,   setMonthOffset]   = useState(0)
-  const [openDropdown,  setOpenDropdown]  = useState(null) // weekKey
-  const [showEditor,    setShowEditor]    = useState(false)
+  const [monthOffset,  setMonthOffset]  = useState(0)
+  const [openDropdown, setOpenDropdown] = useState(null)
+  const [showEditor,   setShowEditor]   = useState(false)
 
-  const currentMonth = useMemo(() => {
-    const d = new Date(today.getFullYear(), today.getMonth() + monthOffset, 1)
-    return d
-  }, [today, monthOffset])
-
-  const weeks = useMemo(() => weeksForMonth(currentMonth.getFullYear(), currentMonth.getMonth()), [currentMonth])
-
-  const labelColorMap = useMemo(() => {
-    const map = {}
-    summaryLabels.forEach((l, i) => { map[l.id] = pillStyle(i) })
-    return map
-  }, [summaryLabels])
+  const currentMonth = useMemo(() => new Date(today.getFullYear(), today.getMonth() + monthOffset, 1), [today, monthOffset])
+  const weeks        = useMemo(() => weeksForMonth(currentMonth.getFullYear(), currentMonth.getMonth()), [currentMonth])
+  const monthLabel   = `${MONTHS_PT[currentMonth.getMonth()]} ${currentMonth.getFullYear()}`
 
   function toggleTag(weekKey, tagId) {
     const curr = summaries[weekKey]?.tags
@@ -307,45 +298,35 @@ function MonthlySummary({ summaries, updateSummary, summaryLabels, updateSummary
     updateSummary(weekKey, { tags: next })
   }
 
-  function saveObs(weekKey, obs) {
-    updateSummary(weekKey, { obs })
-  }
-
-  const monthLabel = `${MONTHS_PT[currentMonth.getMonth()]} ${currentMonth.getFullYear()}`
+  function saveObs(weekKey, obs) { updateSummary(weekKey, { obs }) }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
         <div>
           <h2 className="font-semibold text-gray-800">Resumo Mensal</h2>
-          <p className="text-xs text-gray-400 mt-0.5">Etiquetas e observações por semana</p>
+          <p className="text-xs text-gray-400 mt-0.5">Etiquetas e notas por semana</p>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowEditor(s => !s)}
-            className={`p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors ${showEditor ? 'bg-gray-100 text-gray-600' : ''}`}
             title="Gerenciar etiquetas"
+            className={`p-1.5 rounded-lg transition-colors ${showEditor ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'}`}
           >
             <Settings2 className="w-4 h-4" />
           </button>
-          <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-lg px-2 py-1">
-            <button onClick={() => setMonthOffset(o => o - 1)} className="p-0.5 rounded hover:bg-gray-200 text-gray-500"><ChevronLeft className="w-4 h-4" /></button>
-            <span className="text-sm font-medium text-gray-700 px-2 min-w-[130px] text-center">{monthLabel}</span>
-            <button onClick={() => setMonthOffset(o => o + 1)} className="p-0.5 rounded hover:bg-gray-200 text-gray-500"><ChevronRight className="w-4 h-4" /></button>
+          <div className="flex items-center gap-0.5 bg-gray-50 border border-gray-200 rounded-lg px-1 py-1">
+            <button onClick={() => setMonthOffset(o => o - 1)} className="p-1 rounded-md hover:bg-white hover:shadow-sm text-gray-400 transition-all"><ChevronLeft className="w-3.5 h-3.5" /></button>
+            <span className="text-sm font-medium text-gray-700 px-3 min-w-[128px] text-center">{monthLabel}</span>
+            <button onClick={() => setMonthOffset(o => o + 1)} className="p-1 rounded-md hover:bg-white hover:shadow-sm text-gray-400 transition-all"><ChevronRight className="w-3.5 h-3.5" /></button>
           </div>
         </div>
       </div>
 
-      {/* Day-of-week header */}
-      <div className="flex items-center gap-0 mb-1 pl-[48px] pr-[168px]">
-        {DAYS_PT.map(d => (
-          <div key={d} className="flex-1 text-center text-[10px] font-medium text-gray-400">{d}</div>
-        ))}
-      </div>
-
       {/* Week rows */}
-      <div className="space-y-1">
+      <div className="divide-y divide-gray-50">
         {weeks.map(weekStart => {
           const wKey      = getWeekKey(weekStart)
           const days      = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
@@ -356,26 +337,33 @@ function MonthlySummary({ summaries, updateSummary, summaryLabels, updateSummary
           const available = summaryLabels.filter(l => !tags.includes(l.id))
 
           return (
-            <div key={wKey} className={`flex items-center gap-2 rounded-lg px-2 py-1.5 ${isNow ? 'bg-blue-50 ring-1 ring-blue-200' : 'hover:bg-gray-50'}`}>
-              {/* Week number */}
-              <div className="w-9 shrink-0 text-center">
-                <span className={`text-[10px] font-semibold ${isNow ? 'text-blue-600' : 'text-gray-400'}`}>
-                  S{getISOWeek(weekStart)}
+            <div
+              key={wKey}
+              className={`flex items-center gap-4 pl-5 pr-6 py-3 border-l-[3px] transition-colors ${
+                isNow
+                  ? 'border-l-blue-500 bg-blue-50/30'
+                  : 'border-l-transparent hover:bg-gray-50/60'
+              }`}
+            >
+              {/* Date range label */}
+              <div className="w-[84px] shrink-0">
+                <span className={`text-[11px] font-semibold tabular-nums ${isNow ? 'text-blue-600' : 'text-gray-400'}`}>
+                  {format(days[0], 'dd/MM')} – {format(days[6], 'dd/MM')}
                 </span>
               </div>
 
-              {/* Day cells */}
-              <div className="flex shrink-0">
+              {/* Day cells (mini calendar strip) */}
+              <div className="flex gap-0.5 shrink-0">
                 {days.map(day => {
-                  const dStr       = format(day, 'yyyy-MM-dd')
-                  const inMonth    = day.getMonth() === currentMonth.getMonth()
-                  const isToday    = dStr === todayStr
+                  const dStr    = format(day, 'yyyy-MM-dd')
+                  const inMonth = day.getMonth() === currentMonth.getMonth()
+                  const isToday = dStr === todayStr
                   return (
-                    <div key={dStr} className="w-7 flex items-center justify-center">
-                      <span className={`w-5 h-5 flex items-center justify-center rounded-full text-[10px] font-medium leading-none tabular-nums ${
-                        isToday    ? 'bg-blue-600 text-white' :
-                        inMonth    ? 'text-gray-700' :
-                                     'text-gray-300'
+                    <div key={dStr} className="w-[26px] h-[26px] flex items-center justify-center">
+                      <span className={`w-[22px] h-[22px] flex items-center justify-center rounded-full text-[11px] leading-none tabular-nums transition-colors ${
+                        isToday  ? 'bg-blue-600 text-white font-bold'
+                        : inMonth ? 'text-gray-600 font-medium'
+                        :           'text-gray-300'
                       }`}>
                         {format(day, 'd')}
                       </span>
@@ -385,30 +373,27 @@ function MonthlySummary({ summaries, updateSummary, summaryLabels, updateSummary
               </div>
 
               {/* Tags */}
-              <div className="flex-1 min-w-0 flex flex-wrap gap-1 items-center">
+              <div className="flex-1 min-w-0 flex flex-wrap gap-1.5 items-center">
                 {tags.map(tagId => {
                   const lbl = summaryLabels.find(l => l.id === tagId)
                   if (!lbl) return null
-                  const i   = summaryLabels.indexOf(lbl)
+                  const i = summaryLabels.indexOf(lbl)
                   return (
-                    <span key={tagId} className={`inline-flex items-center gap-0.5 pl-1.5 pr-0.5 py-0.5 rounded text-xs font-medium ${pillStyle(i)}`}>
-                      {lbl.emoji} {lbl.label}
-                      <button
-                        onClick={() => toggleTag(wKey, tagId)}
-                        className="ml-0.5 rounded-full hover:bg-black/10 p-0.5 leading-none"
-                      >
+                    <span key={tagId} className={`inline-flex items-center gap-1 pl-2 pr-1 py-[3px] rounded-full text-[11px] font-medium ${pillStyle(i)}`}>
+                      <span className="leading-none">{lbl.emoji}</span>
+                      <span>{lbl.label}</span>
+                      <button onClick={() => toggleTag(wKey, tagId)} className="rounded-full hover:bg-black/10 p-[2px] leading-none ml-0.5">
                         <X className="w-2.5 h-2.5" />
                       </button>
                     </span>
                   )
                 })}
 
-                {/* Add tag button */}
                 {available.length > 0 && (
                   <div className="relative">
                     <button
                       onClick={() => setOpenDropdown(openDropdown === wKey ? null : wKey)}
-                      className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors border border-dashed border-gray-300 hover:border-blue-300"
+                      className="w-6 h-6 flex items-center justify-center rounded-full border border-dashed border-gray-300 text-gray-400 hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50 transition-colors"
                     >
                       <Plus className="w-3 h-3" />
                     </button>
@@ -416,8 +401,8 @@ function MonthlySummary({ summaries, updateSummary, summaryLabels, updateSummary
                       <TagDropdown
                         weekKey={wKey}
                         available={available}
-                        labelColors={labelColorMap}
-                        onAdd={(wk, id) => { toggleTag(wk, id) }}
+                        labelColors={{}}
+                        onAdd={(wk, id) => toggleTag(wk, id)}
                         onClose={() => setOpenDropdown(null)}
                       />
                     )}
@@ -430,22 +415,24 @@ function MonthlySummary({ summaries, updateSummary, summaryLabels, updateSummary
                 defaultValue={obs}
                 key={`${wKey}-obs`}
                 onBlur={e => saveObs(wKey, e.target.value)}
-                placeholder="Observação..."
-                className="w-44 text-xs border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-600 placeholder-gray-300 bg-transparent hover:bg-white focus:bg-white"
+                placeholder="Observação…"
+                className="w-52 shrink-0 text-xs text-gray-600 placeholder-gray-300 bg-transparent border-0 border-b border-gray-200 pb-0.5 focus:outline-none focus:border-blue-400 transition-colors"
               />
             </div>
           )
         })}
       </div>
 
-      {/* Label editor (collapsible) */}
+      {/* Label editor */}
       {showEditor && (
-        <SummaryLabelEditor
-          labels={summaryLabels}
-          onUpdate={updateSummaryLabel}
-          onAdd={addSummaryLabel}
-          onRemove={removeSummaryLabel}
-        />
+        <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/60">
+          <SummaryLabelEditor
+            labels={summaryLabels}
+            onUpdate={updateSummaryLabel}
+            onAdd={addSummaryLabel}
+            onRemove={removeSummaryLabel}
+          />
+        </div>
       )}
     </div>
   )
