@@ -1,8 +1,9 @@
 import { useState, useCallback } from 'react'
 
-const TASKS_KEY   = 'dash_tasks'
-const SUMMARY_KEY = 'dash_task_summaries'
-const TYPES_KEY   = 'dash_task_types'
+const TASKS_KEY          = 'dash_tasks'
+const SUMMARY_KEY        = 'dash_task_summaries'
+const TYPES_KEY          = 'dash_task_types'
+const SUMMARY_LABELS_KEY = 'dash_summary_labels'
 
 const DEFAULT_TYPES = [
   { id: 'reuniao',  label: 'Reunião',  bg: 'bg-blue-500' },
@@ -11,13 +12,21 @@ const DEFAULT_TYPES = [
   { id: 'outro',    label: 'Outro',    bg: 'bg-purple-500' },
 ]
 
+const DEFAULT_SUMMARY_LABELS = [
+  { id: 'novaOferta',      emoji: '🆕', label: 'Nova oferta' },
+  { id: 'ofertaAjustada',  emoji: '🔧', label: 'Oferta ajustada' },
+  { id: 'ofertaOtimizada', emoji: '✅', label: 'Oferta otimizada' },
+  { id: 'ofertaEscalada',  emoji: '📈', label: 'Oferta escalada' },
+]
+
 function persist(key, value) { localStorage.setItem(key, JSON.stringify(value)) }
 function load(key, fallback) { try { return JSON.parse(localStorage.getItem(key)) || fallback } catch { return fallback } }
 
 export function useTaskData() {
-  const [tasks,     setTasks]     = useState(() => load(TASKS_KEY,   []))
-  const [summaries, setSummaries] = useState(() => load(SUMMARY_KEY, {}))
-  const [taskTypes, setTaskTypes] = useState(() => load(TYPES_KEY,   DEFAULT_TYPES))
+  const [tasks,          setTasks]          = useState(() => load(TASKS_KEY,          []))
+  const [summaries,      setSummaries]      = useState(() => load(SUMMARY_KEY,        {}))
+  const [taskTypes,      setTaskTypes]      = useState(() => load(TYPES_KEY,          DEFAULT_TYPES))
+  const [summaryLabels,  setSummaryLabels]  = useState(() => load(SUMMARY_LABELS_KEY, DEFAULT_SUMMARY_LABELS))
 
   const addTask = useCallback((task) => {
     setTasks(prev => { const next = [...prev, { id: Date.now().toString(), ...task }]; persist(TASKS_KEY, next); return next })
@@ -50,9 +59,22 @@ export function useTaskData() {
   const removeTaskType = useCallback((id) => {
     setTaskTypes(prev => {
       if (prev.length <= 1) return prev
-      const next = prev.filter(t => t.id !== id)
-      persist(TYPES_KEY, next)
-      return next
+      const next = prev.filter(t => t.id !== id); persist(TYPES_KEY, next); return next
+    })
+  }, [])
+
+  const updateSummaryLabel = useCallback((id, fields) => {
+    setSummaryLabels(prev => { const next = prev.map(l => l.id === id ? { ...l, ...fields } : l); persist(SUMMARY_LABELS_KEY, next); return next })
+  }, [])
+
+  const addSummaryLabel = useCallback((emoji, label) => {
+    setSummaryLabels(prev => { const next = [...prev, { id: `sl_${Date.now()}`, emoji, label }]; persist(SUMMARY_LABELS_KEY, next); return next })
+  }, [])
+
+  const removeSummaryLabel = useCallback((id) => {
+    setSummaryLabels(prev => {
+      if (prev.length <= 1) return prev
+      const next = prev.filter(l => l.id !== id); persist(SUMMARY_LABELS_KEY, next); return next
     })
   }, [])
 
@@ -60,5 +82,6 @@ export function useTaskData() {
     tasks, addTask, updateTask, removeTask,
     summaries, updateSummary,
     taskTypes, updateTaskType, addTaskType, removeTaskType,
+    summaryLabels, updateSummaryLabel, addSummaryLabel, removeSummaryLabel,
   }
 }
