@@ -7,6 +7,7 @@ import OffersOverview from './pages/OffersOverview'
 import OfferDetail from './pages/OfferDetail'
 import Settings from './pages/Settings'
 import Debug from './pages/Debug'
+import Tarefas from './pages/Tarefas'
 
 export default function App() {
   const { authenticated, hasCredentials, login, setupCredentials, logout } = useAuth()
@@ -29,7 +30,8 @@ export default function App() {
           <Route path="/ofertas" element={<OffersOverview />} />
           <Route path="/oferta" element={<OfferDetail />} />
           <Route path="/config" element={<Settings />} />
-          <Route path="/debug" element={<Debug />} />
+          <Route path="/debug"    element={<Debug />} />
+          <Route path="/tarefas" element={<Tarefas />} />
         </Route>
       </Routes>
     </BrowserRouter>

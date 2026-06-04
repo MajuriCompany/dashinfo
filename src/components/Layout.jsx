@@ -1,5 +1,5 @@
 import { Outlet, NavLink } from 'react-router-dom'
-import { LayoutDashboard, TrendingUp, BarChart2, Settings, RefreshCw, Bug, LogOut } from 'lucide-react'
+import { LayoutDashboard, TrendingUp, BarChart2, Settings, RefreshCw, Bug, LogOut, ClipboardList } from 'lucide-react'
 import { useContext, createContext, useState } from 'react'
 
 export const RefreshContext = createContext(null)
@@ -8,6 +8,7 @@ const NAV = [
   { to: '/',        label: 'Visão Geral',   Icon: LayoutDashboard },
   { to: '/ofertas', label: 'Todas Ofertas', Icon: BarChart2 },
   { to: '/oferta',  label: 'Por Oferta',    Icon: TrendingUp },
+  { to: '/tarefas', label: 'Tarefas',        Icon: ClipboardList },
   { to: '/config',  label: 'Configurações', Icon: Settings },
   { to: '/debug',   label: 'Debug',         Icon: Bug },
 ]
