@@ -1,22 +1,14 @@
-import { useState, useMemo, useEffect } from 'react'
-import { ChevronLeft, ChevronRight, X, ClipboardList, CheckCircle2, Circle } from 'lucide-react'
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
+import { ChevronLeft, ChevronRight, X, ClipboardList, CheckCircle2, Circle, Plus, Pencil, Trash2, Check } from 'lucide-react'
 import { getISOWeek, getISOWeekYear, startOfISOWeek, addWeeks, addDays, format } from 'date-fns'
 import { useTaskData } from '../hooks/useTaskData'
 
-const SLOT_HEIGHT  = 32
-const START_HOUR   = 6
-const END_HOUR     = 23
-const TOTAL_SLOTS  = (END_HOUR - START_HOUR) * 2  // 34 slots (06:00 → 23:00)
+const SLOT_HEIGHT = 36
+const START_HOUR  = 6
+const END_HOUR    = 23
+const TOTAL_SLOTS = (END_HOUR - START_HOUR) * 2  // 34 slots (06:00 → 23:00)
 
 const DAYS_PT = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
-
-const TASK_TYPES = [
-  { id: 'reuniao',  label: 'Reunião',  bg: 'bg-blue-500' },
-  { id: 'producao', label: 'Produção', bg: 'bg-emerald-500' },
-  { id: 'revisao',  label: 'Revisão',  bg: 'bg-amber-500' },
-  { id: 'outro',    label: 'Outro',    bg: 'bg-purple-500' },
-]
-const TYPE_MAP = Object.fromEntries(TASK_TYPES.map(t => [t.id, t]))
 
 const SUMMARY_CATS = [
   { id: 'novaOferta',      emoji: '🆕', label: 'Nova oferta criada' },
@@ -25,30 +17,38 @@ const SUMMARY_CATS = [
   { id: 'ofertaEscalada',  emoji: '📈', label: 'Oferta escalada' },
 ]
 
+const COLOR_OPTIONS = [
+  'bg-blue-500', 'bg-emerald-500', 'bg-amber-500', 'bg-purple-500',
+  'bg-red-500',  'bg-pink-500',    'bg-cyan-500',  'bg-indigo-500',
+  'bg-teal-500', 'bg-orange-500',
+]
+
+function clamp(min, max, val) { return Math.min(max, Math.max(min, val)) }
+
 function getWeekKey(date) {
   return `${getISOWeekYear(date)}-W${String(getISOWeek(date)).padStart(2, '0')}`
 }
 
 function slotToTime(slot) {
   const mins = START_HOUR * 60 + slot * 30
-  const h = Math.floor(mins / 60)
-  const m = mins % 60
+  const h = Math.floor(mins / 60), m = mins % 60
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
 }
 
-function TaskModal({ initial, onSave, onDelete, onClose }) {
+// ── Modal ────────────────────────────────────────────────────────────────────
+
+function TaskModal({ initial, taskTypes, onSave, onDelete, onClose }) {
   const startSlot = initial?.startSlot ?? 0
   const [title,   setTitle]   = useState(initial?.title ?? '')
-  const [type,    setType]    = useState(initial?.type ?? 'reuniao')
+  const [typeId,  setTypeId]  = useState(initial?.type  ?? (taskTypes[0]?.id ?? ''))
   const [endSlot, setEndSlot] = useState(
     initial?.endSlot ?? Math.min(startSlot + 2, TOTAL_SLOTS)
   )
-
   const minEnd = startSlot + 1
 
   function handleSave() {
     if (!title.trim()) return
-    onSave({ title: title.trim(), type, endSlot })
+    onSave({ title: title.trim(), type: typeId, endSlot })
   }
 
   return (
@@ -56,12 +56,8 @@ function TaskModal({ initial, onSave, onDelete, onClose }) {
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
       <div className="relative bg-white rounded-xl shadow-xl p-5 w-80 space-y-4 z-10">
         <div className="flex items-center justify-between">
-          <h3 className="font-semibold text-gray-800">
-            {initial?.id ? 'Editar tarefa' : 'Nova tarefa'}
-          </h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-            <X className="w-4 h-4" />
-          </button>
+          <h3 className="font-semibold text-gray-800">{initial?.id ? 'Editar tarefa' : 'Nova tarefa'}</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
         </div>
 
         <div>
@@ -79,12 +75,12 @@ function TaskModal({ initial, onSave, onDelete, onClose }) {
         <div>
           <label className="block text-xs text-gray-500 mb-1">Tipo</label>
           <div className="flex gap-2 flex-wrap">
-            {TASK_TYPES.map(t => (
+            {taskTypes.map(t => (
               <button
                 key={t.id}
-                onClick={() => setType(t.id)}
+                onClick={() => setTypeId(t.id)}
                 className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                  type === t.id ? `${t.bg} text-white` : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  typeId === t.id ? `${t.bg} text-white` : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
                 {t.label}
@@ -117,10 +113,7 @@ function TaskModal({ initial, onSave, onDelete, onClose }) {
             Salvar
           </button>
           {initial?.id && (
-            <button
-              onClick={() => onDelete(initial.id)}
-              className="px-3 rounded-lg bg-red-50 text-red-600 text-sm hover:bg-red-100"
-            >
+            <button onClick={() => onDelete(initial.id)} className="px-3 rounded-lg bg-red-50 text-red-600 text-sm hover:bg-red-100">
               Excluir
             </button>
           )}
@@ -130,30 +123,228 @@ function TaskModal({ initial, onSave, onDelete, onClose }) {
   )
 }
 
-export default function Tarefas() {
-  const { tasks, addTask, updateTask, removeTask, summaries, updateSummary } = useTaskData()
-  const [weekOffset,    setWeekOffset]    = useState(0)
-  const [modal,         setModal]         = useState(null)
-  const [draftSummary,  setDraftSummary]  = useState({})
+// ── Type legend (editable) ────────────────────────────────────────────────────
 
-  const today    = useMemo(() => new Date(), [])
+function TypeLegend({ taskTypes, onUpdate, onAdd, onRemove }) {
+  const [editId,    setEditId]    = useState(null)
+  const [editLabel, setEditLabel] = useState('')
+  const [editColor, setEditColor] = useState('')
+  const [showAdd,   setShowAdd]   = useState(false)
+  const [newLabel,  setNewLabel]  = useState('')
+  const [newColor,  setNewColor]  = useState(COLOR_OPTIONS[0])
+
+  function startEdit(t) { setEditId(t.id); setEditLabel(t.label); setEditColor(t.bg) }
+
+  function commitEdit() {
+    if (editLabel.trim()) onUpdate(editId, { label: editLabel.trim(), bg: editColor })
+    setEditId(null)
+  }
+
+  function commitAdd() {
+    if (newLabel.trim()) { onAdd(newLabel.trim(), newColor); setNewLabel(''); setNewColor(COLOR_OPTIONS[0]); setShowAdd(false) }
+  }
+
+  return (
+    <div className="px-4 py-3 border-t border-gray-100 bg-gray-50">
+      <div className="flex flex-wrap gap-x-4 gap-y-2 items-center">
+        {taskTypes.map(t => (
+          <div key={t.id} className="flex items-center gap-1 group">
+            {editId === t.id ? (
+              <>
+                <div className="flex gap-1 mr-1">
+                  {COLOR_OPTIONS.map(c => (
+                    <button
+                      key={c}
+                      onClick={() => setEditColor(c)}
+                      className={`w-3.5 h-3.5 rounded-sm ${c} ${editColor === c ? 'ring-2 ring-offset-1 ring-gray-500' : ''}`}
+                    />
+                  ))}
+                </div>
+                <input
+                  autoFocus
+                  value={editLabel}
+                  onChange={e => setEditLabel(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') setEditId(null) }}
+                  className="border border-gray-300 rounded px-1.5 py-0.5 text-xs w-24 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+                <button onClick={commitEdit} className="text-emerald-600 hover:text-emerald-700 ml-1"><Check className="w-3.5 h-3.5" /></button>
+                <button onClick={() => setEditId(null)} className="text-gray-400 hover:text-gray-600"><X className="w-3.5 h-3.5" /></button>
+              </>
+            ) : (
+              <>
+                <span className={`inline-block w-2.5 h-2.5 rounded-sm ${t.bg}`} />
+                <span className="text-xs text-gray-600">{t.label}</span>
+                <button
+                  onClick={() => startEdit(t)}
+                  className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-gray-600 transition-opacity ml-0.5"
+                >
+                  <Pencil className="w-3 h-3" />
+                </button>
+                {taskTypes.length > 1 && (
+                  <button
+                    onClick={() => onRemove(t.id)}
+                    className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-opacity"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        ))}
+
+        {showAdd ? (
+          <div className="flex items-center gap-1.5">
+            <div className="flex gap-1 mr-1">
+              {COLOR_OPTIONS.map(c => (
+                <button
+                  key={c}
+                  onClick={() => setNewColor(c)}
+                  className={`w-3.5 h-3.5 rounded-sm ${c} ${newColor === c ? 'ring-2 ring-offset-1 ring-gray-500' : ''}`}
+                />
+              ))}
+            </div>
+            <input
+              autoFocus
+              value={newLabel}
+              onChange={e => setNewLabel(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') commitAdd(); if (e.key === 'Escape') setShowAdd(false) }}
+              placeholder="Nome..."
+              className="border border-gray-300 rounded px-1.5 py-0.5 text-xs w-24 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+            <button onClick={commitAdd} className="text-emerald-600 hover:text-emerald-700"><Check className="w-3.5 h-3.5" /></button>
+            <button onClick={() => setShowAdd(false)} className="text-gray-400 hover:text-gray-600"><X className="w-3.5 h-3.5" /></button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setShowAdd(true)}
+            className="flex items-center gap-1 text-xs text-gray-400 hover:text-blue-600 transition-colors"
+          >
+            <Plus className="w-3 h-3" />
+            Adicionar etiqueta
+          </button>
+        )}
+
+        <span className="ml-auto text-xs text-gray-400 hidden sm:block">Clique numa célula · Arraste para mover/redimensionar</span>
+      </div>
+    </div>
+  )
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────────
+
+export default function Tarefas() {
+  const { tasks, addTask, updateTask, removeTask, summaries, updateSummary, taskTypes, updateTaskType, addTaskType, removeTaskType } = useTaskData()
+  const [weekOffset,   setWeekOffset]   = useState(0)
+  const [modal,        setModal]        = useState(null)
+  const [draftSummary, setDraftSummary] = useState({})
+  const [dragPreview,  setDragPreviewState] = useState(null)
+
+  const dragPreviewRef = useRef(null)
+  const gridBodyRef    = useRef(null)
+
+  const today     = useMemo(() => new Date(), [])
   const weekStart = useMemo(() => startOfISOWeek(addWeeks(today, weekOffset)), [today, weekOffset])
   const weekKey   = useMemo(() => getWeekKey(weekStart), [weekStart])
   const weekDays  = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart])
 
-  useEffect(() => {
-    setDraftSummary(summaries[weekKey] || {})
-  }, [weekKey, summaries])
+  useEffect(() => { setDraftSummary(summaries[weekKey] || {}) }, [weekKey, summaries])
 
+  // cleanup body cursor/select on unmount
+  useEffect(() => () => { document.body.style.cursor = ''; document.body.style.userSelect = '' }, [])
+
+  const typeMap   = useMemo(() => Object.fromEntries(taskTypes.map(t => [t.id, t])), [taskTypes])
   const weekTasks = useMemo(() => tasks.filter(t => t.weekKey === weekKey), [tasks, weekKey])
+
+  // Merge drag preview for live rendering
+  const effectiveTasks = useMemo(() => {
+    if (!dragPreview) return weekTasks
+    return weekTasks.map(t => t.id === dragPreview.id ? { ...t, ...dragPreview } : t)
+  }, [weekTasks, dragPreview])
 
   const tasksByDay = useMemo(() => {
     const byDay = Array.from({ length: 7 }, () => [])
-    weekTasks.forEach(t => { if (t.dayIdx >= 0 && t.dayIdx < 7) byDay[t.dayIdx].push(t) })
+    effectiveTasks.forEach(t => { if (t.dayIdx >= 0 && t.dayIdx < 7) byDay[t.dayIdx].push(t) })
     return byDay
-  }, [weekTasks])
+  }, [effectiveTasks])
 
   const todayStr = format(today, 'yyyy-MM-dd')
+
+  function setDragPreview(v) { dragPreviewRef.current = v; setDragPreviewState(v) }
+
+  // ── Move drag ───────────────────────────────────────────────────────────────
+  const startMove = useCallback((e, task) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    const origX = e.clientX, origY = e.clientY
+    const duration = task.endSlot - task.startSlot
+    let isDragging = false
+
+    function handleMove(e) {
+      if (!isDragging) {
+        if (Math.hypot(e.clientX - origX, e.clientY - origY) < 5) return
+        isDragging = true
+        document.body.style.cursor = 'grabbing'
+      }
+      const slotDelta = Math.round((e.clientY - origY) / SLOT_HEIGHT)
+      const newStart  = clamp(0, TOTAL_SLOTS - duration, task.startSlot + slotDelta)
+      let   newDay    = task.dayIdx
+      if (gridBodyRef.current) {
+        const rect = gridBodyRef.current.getBoundingClientRect()
+        newDay = clamp(0, 6, Math.floor((e.clientX - rect.left) / (rect.width / 7)))
+      }
+      setDragPreview({ id: task.id, dayIdx: newDay, startSlot: newStart, endSlot: newStart + duration })
+    }
+
+    function handleUp() {
+      document.removeEventListener('mousemove', handleMove)
+      document.removeEventListener('mouseup', handleUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      if (isDragging) {
+        const p = dragPreviewRef.current
+        if (p) updateTask(task.id, { dayIdx: p.dayIdx, startSlot: p.startSlot, endSlot: p.endSlot })
+        setDragPreview(null)
+      } else {
+        setModal({ dayIdx: task.dayIdx, startSlot: task.startSlot, task })
+      }
+    }
+
+    document.body.style.userSelect = 'none'
+    document.addEventListener('mousemove', handleMove)
+    document.addEventListener('mouseup', handleUp)
+  }, [updateTask])
+
+  // ── Resize drag ─────────────────────────────────────────────────────────────
+  const startResize = useCallback((e, task) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    const origY = e.clientY
+    setDragPreview({ id: task.id, dayIdx: task.dayIdx, startSlot: task.startSlot, endSlot: task.endSlot })
+
+    function handleMove(e) {
+      const slotDelta  = Math.round((e.clientY - origY) / SLOT_HEIGHT)
+      const newEndSlot = clamp(task.startSlot + 1, TOTAL_SLOTS, task.endSlot + slotDelta)
+      setDragPreview({ id: task.id, dayIdx: task.dayIdx, startSlot: task.startSlot, endSlot: newEndSlot })
+    }
+
+    function handleUp() {
+      document.removeEventListener('mousemove', handleMove)
+      document.removeEventListener('mouseup', handleUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      const p = dragPreviewRef.current
+      if (p && p.endSlot !== task.endSlot) updateTask(task.id, { endSlot: p.endSlot })
+      setDragPreview(null)
+    }
+
+    document.body.style.cursor = 'ns-resize'
+    document.body.style.userSelect = 'none'
+    document.addEventListener('mousemove', handleMove)
+    document.addEventListener('mouseup', handleUp)
+  }, [updateTask])
 
   function handleSaveTask({ title, type, endSlot }) {
     if (!modal) return
@@ -165,10 +356,7 @@ export default function Tarefas() {
     setModal(null)
   }
 
-  function handleDeleteTask(id) {
-    removeTask(id)
-    setModal(null)
-  }
+  function handleDeleteTask(id) { removeTask(id); setModal(null) }
 
   return (
     <div className="space-y-6">
@@ -182,26 +370,17 @@ export default function Tarefas() {
           <p className="text-sm text-gray-500 mt-0.5">Grade semanal e resumo de atividades</p>
         </div>
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => setWeekOffset(0)}
-            className="text-xs text-blue-600 hover:underline font-medium"
-          >
+          <button onClick={() => setWeekOffset(0)} className="text-xs text-blue-600 hover:underline font-medium">
             Semana atual
           </button>
           <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg px-2 py-1 shadow-sm">
-            <button
-              onClick={() => setWeekOffset(o => o - 1)}
-              className="p-1 rounded hover:bg-gray-100 text-gray-500"
-            >
+            <button onClick={() => setWeekOffset(o => o - 1)} className="p-1 rounded hover:bg-gray-100 text-gray-500">
               <ChevronLeft className="w-4 h-4" />
             </button>
             <span className="text-sm font-medium text-gray-700 px-2 min-w-[148px] text-center">
               {format(weekDays[0], 'dd/MM')} – {format(weekDays[6], 'dd/MM/yyyy')}
             </span>
-            <button
-              onClick={() => setWeekOffset(o => o + 1)}
-              className="p-1 rounded hover:bg-gray-100 text-gray-500"
-            >
+            <button onClick={() => setWeekOffset(o => o + 1)} className="p-1 rounded hover:bg-gray-100 text-gray-500">
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
@@ -210,104 +389,99 @@ export default function Tarefas() {
 
       {/* Weekly Grid */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="overflow-auto max-h-[540px]">
+        <div className="overflow-auto max-h-[560px]">
           <div className="flex min-w-[640px]">
 
             {/* Time label column */}
-            <div className="w-14 shrink-0 flex flex-col">
+            <div className="w-16 shrink-0 flex flex-col">
               <div className="h-10 sticky top-0 bg-gray-50 z-20 border-b border-r border-gray-200 shrink-0" />
               {Array.from({ length: TOTAL_SLOTS }, (_, i) => (
                 <div
                   key={i}
                   style={{ height: SLOT_HEIGHT }}
-                  className="flex items-start justify-end pr-2 border-b border-r border-gray-100 shrink-0"
+                  className="flex items-center justify-end pr-2 border-b border-r border-gray-100 shrink-0"
                 >
-                  {i % 2 === 0 && (
-                    <span className="text-[10px] text-gray-400 -translate-y-1.5 leading-none select-none">
-                      {slotToTime(i)}
-                    </span>
-                  )}
+                  <span className="text-[10px] text-gray-400 leading-none select-none tabular-nums">
+                    {slotToTime(i)}
+                  </span>
                 </div>
               ))}
             </div>
 
             {/* Day columns */}
-            {weekDays.map((day, dayIdx) => {
-              const dateStr  = format(day, 'yyyy-MM-dd')
-              const isToday  = dateStr === todayStr
-              const dayTasks = tasksByDay[dayIdx]
+            <div ref={gridBodyRef} className="flex flex-1">
+              {weekDays.map((day, dayIdx) => {
+                const dateStr  = format(day, 'yyyy-MM-dd')
+                const isToday  = dateStr === todayStr
+                const dayTasks = tasksByDay[dayIdx]
 
-              return (
-                <div key={dayIdx} className="flex-1 flex flex-col min-w-0">
-                  {/* Day header */}
-                  <div
-                    className={`h-10 sticky top-0 z-20 flex flex-col items-center justify-center border-b border-l border-gray-200 shrink-0 ${
-                      isToday ? 'bg-blue-50' : 'bg-gray-50'
-                    }`}
-                  >
-                    <span className={`text-xs font-semibold leading-tight ${isToday ? 'text-blue-700' : 'text-gray-600'}`}>
-                      {DAYS_PT[dayIdx]}
-                    </span>
-                    <span className={`text-[10px] leading-tight ${isToday ? 'text-blue-500' : 'text-gray-400'}`}>
-                      {format(day, 'dd/MM')}
-                    </span>
-                  </div>
+                return (
+                  <div key={dayIdx} className="flex-1 flex flex-col min-w-0">
+                    {/* Day header */}
+                    <div className={`h-10 sticky top-0 z-20 flex flex-col items-center justify-center border-b border-l border-gray-200 shrink-0 ${isToday ? 'bg-blue-50' : 'bg-gray-50'}`}>
+                      <span className={`text-xs font-semibold leading-tight ${isToday ? 'text-blue-700' : 'text-gray-600'}`}>{DAYS_PT[dayIdx]}</span>
+                      <span className={`text-[10px] leading-tight ${isToday ? 'text-blue-500' : 'text-gray-400'}`}>{format(day, 'dd/MM')}</span>
+                    </div>
 
-                  {/* Grid body */}
-                  <div className="relative border-l border-gray-200">
-                    {/* Clickable cells */}
-                    {Array.from({ length: TOTAL_SLOTS }, (_, slotIdx) => (
-                      <div
-                        key={slotIdx}
-                        style={{ height: SLOT_HEIGHT }}
-                        onClick={() => setModal({ dayIdx, startSlot: slotIdx, task: null })}
-                        className={`border-b border-gray-100 cursor-pointer transition-colors ${
-                          isToday ? 'hover:bg-blue-50/60' : 'hover:bg-gray-50'
-                        }`}
-                      />
-                    ))}
-
-                    {/* Task blocks */}
-                    {dayTasks.map(task => {
-                      const t = TYPE_MAP[task.type] || TYPE_MAP.outro
-                      const blockH = (task.endSlot - task.startSlot) * SLOT_HEIGHT
-                      return (
+                    {/* Grid body */}
+                    <div className="relative border-l border-gray-200">
+                      {/* Clickable cells */}
+                      {Array.from({ length: TOTAL_SLOTS }, (_, slotIdx) => (
                         <div
-                          key={task.id}
-                          style={{
-                            position: 'absolute',
-                            top:    task.startSlot * SLOT_HEIGHT,
-                            height: blockH,
-                            left:   3,
-                            right:  3,
-                          }}
-                          className={`${t.bg} text-white rounded-md text-xs px-1.5 py-0.5 cursor-pointer hover:opacity-90 overflow-hidden z-10 shadow-sm`}
-                          onClick={e => { e.stopPropagation(); setModal({ dayIdx, startSlot: task.startSlot, task }) }}
-                        >
-                          <div className="font-medium leading-tight truncate">{task.title}</div>
-                          {blockH >= 52 && (
-                            <div className="text-white/75 text-[10px] leading-tight">
-                              {slotToTime(task.startSlot)}–{slotToTime(task.endSlot)}
+                          key={slotIdx}
+                          style={{ height: SLOT_HEIGHT }}
+                          onClick={() => { if (!dragPreviewRef.current) setModal({ dayIdx, startSlot: slotIdx, task: null }) }}
+                          className={`border-b border-gray-100 cursor-pointer transition-colors ${isToday ? 'hover:bg-blue-50/60' : 'hover:bg-gray-50'}`}
+                        />
+                      ))}
+
+                      {/* Task blocks */}
+                      {dayTasks.map(task => {
+                        const t      = typeMap[task.type] || taskTypes[0]
+                        if (!t) return null
+                        const blockH    = (task.endSlot - task.startSlot) * SLOT_HEIGHT
+                        const isPreview = dragPreview?.id === task.id
+                        return (
+                          <div
+                            key={task.id}
+                            style={{ position: 'absolute', top: task.startSlot * SLOT_HEIGHT + 1, height: blockH - 2, left: 3, right: 3 }}
+                            className={`${t.bg} text-white rounded-md text-xs overflow-hidden z-10 shadow-sm select-none pb-3 ${
+                              isPreview ? 'opacity-90 ring-2 ring-white/50 cursor-grabbing' : 'cursor-grab'
+                            }`}
+                            onMouseDown={e => startMove(e, task)}
+                            onClick={e => e.stopPropagation()}
+                          >
+                            <div className="px-1.5 pt-0.5 font-medium leading-tight truncate">{task.title}</div>
+                            {blockH >= 58 && (
+                              <div className="px-1.5 text-white/75 text-[10px] leading-tight">
+                                {slotToTime(task.startSlot)}–{slotToTime(task.endSlot)}
+                              </div>
+                            )}
+                            {/* Resize handle */}
+                            <div
+                              className="absolute bottom-0 left-0 right-0 h-3 cursor-ns-resize flex items-center justify-center"
+                              onMouseDown={e => startResize(e, task)}
+                              onClick={e => e.stopPropagation()}
+                            >
+                              <div className="w-8 h-0.5 bg-white/40 rounded-full" />
                             </div>
-                          )}
-                        </div>
-                      )
-                    })}
+                          </div>
+                        )
+                      })}
+                    </div>
                   </div>
-                </div>
-              )
-            })}
+                )
+              })}
+            </div>
           </div>
         </div>
-        <div className="px-4 py-2 border-t border-gray-100 bg-gray-50 flex gap-4 text-xs text-gray-500">
-          {TASK_TYPES.map(t => (
-            <span key={t.id} className="flex items-center gap-1">
-              <span className={`inline-block w-2.5 h-2.5 rounded-sm ${t.bg}`} />
-              {t.label}
-            </span>
-          ))}
-          <span className="ml-auto text-gray-400">Clique numa célula para adicionar</span>
-        </div>
+
+        <TypeLegend
+          taskTypes={taskTypes}
+          onUpdate={updateTaskType}
+          onAdd={addTaskType}
+          onRemove={removeTaskType}
+        />
       </div>
 
       {/* Weekly Summary */}
@@ -329,7 +503,7 @@ export default function Tarefas() {
                   <span className="text-sm font-medium text-gray-700">{cat.label}</span>
                   {filled
                     ? <CheckCircle2 className="w-4 h-4 text-emerald-500 ml-auto shrink-0" />
-                    : <Circle      className="w-4 h-4 text-gray-300 ml-auto shrink-0" />
+                    : <Circle       className="w-4 h-4 text-gray-300 ml-auto shrink-0" />
                   }
                 </div>
                 <textarea
@@ -354,6 +528,7 @@ export default function Tarefas() {
               ? { ...modal.task }
               : { startSlot: modal.startSlot, endSlot: Math.min(modal.startSlot + 2, TOTAL_SLOTS) }
           }
+          taskTypes={taskTypes}
           onSave={handleSaveTask}
           onDelete={handleDeleteTask}
           onClose={() => setModal(null)}
