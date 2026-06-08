@@ -614,14 +614,24 @@ export default function Tarefas() {
                         if (!t) return null
                         const blockH    = (task.endSlot - task.startSlot) * SLOT_HEIGHT
                         const isPreview = dragPreview?.id === task.id
+                        const bgColor   = task.done ? 'bg-emerald-500' : t.bg
                         return (
                           <div key={task.id}
                             style={{ position: 'absolute', top: task.startSlot * SLOT_HEIGHT + 1, height: blockH - 2, left: 3, right: 3 }}
-                            className={`${t.bg} text-white rounded-md text-xs overflow-hidden z-10 shadow-sm select-none pb-3 ${isPreview ? 'opacity-90 ring-2 ring-white/50 cursor-grabbing' : 'cursor-grab'}`}
+                            className={`${bgColor} text-white rounded-md text-xs overflow-hidden z-10 shadow-sm select-none pb-3 ${isPreview ? 'opacity-90 ring-2 ring-white/50 cursor-grabbing' : 'cursor-grab'}`}
                             onMouseDown={e => startMove(e, task)}
                             onClick={e => e.stopPropagation()}
                           >
-                            <div className="px-1.5 pt-0.5 font-medium leading-tight truncate">{task.title}</div>
+                            <div className="flex items-start gap-0.5 px-1.5 pt-0.5">
+                              <div className={`flex-1 min-w-0 font-medium leading-tight break-words ${task.done ? 'line-through opacity-80' : ''}`}>{task.title}</div>
+                              <button
+                                onMouseDown={e => e.stopPropagation()}
+                                onClick={e => { e.stopPropagation(); updateTask(task.id, { done: !task.done }) }}
+                                className={`shrink-0 w-4 h-4 rounded-full border border-white/60 flex items-center justify-center transition-colors mt-0.5 ${task.done ? 'bg-white/30' : 'hover:bg-white/20'}`}
+                              >
+                                {task.done && <Check className="w-2.5 h-2.5" />}
+                              </button>
+                            </div>
                             {blockH >= 58 && <div className="px-1.5 text-white/75 text-[10px] leading-tight">{slotToTime(task.startSlot)}–{slotToTime(task.endSlot)}</div>}
                             <div className="absolute bottom-0 left-0 right-0 h-3 cursor-ns-resize flex items-center justify-center"
                               onMouseDown={e => startResize(e, task)} onClick={e => e.stopPropagation()}>
