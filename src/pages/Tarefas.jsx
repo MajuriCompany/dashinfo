@@ -235,9 +235,14 @@ function ObsCell({ obs, onSave }) {
   )
 }
 
-function TagDropdown({ weekKey, available, onAdd, onAddNote, onClose }) {
-  const ref = useRef(null)
+function TagDropdown({ weekKey, available, summaryLabels, onAdd, onAddNote, onClose }) {
+  const ref     = useRef(null)
+  const inputRef = useRef(null)
   const [noteText, setNoteText] = useState('')
+
+  useEffect(() => {
+    inputRef.current?.focus({ preventScroll: true })
+  }, [])
 
   useEffect(() => {
     function handle(e) { if (ref.current && !ref.current.contains(e.target)) onClose() }
@@ -254,7 +259,7 @@ function TagDropdown({ weekKey, available, onAdd, onAddNote, onClose }) {
       <div className="px-3 pt-2.5 pb-2">
         <div className="flex items-center gap-1.5">
           <input
-            autoFocus
+            ref={inputRef}
             placeholder="Nota rápida desta semana…"
             value={noteText}
             onChange={e => setNoteText(e.target.value)}
@@ -276,12 +281,15 @@ function TagDropdown({ weekKey, available, onAdd, onAddNote, onClose }) {
         <>
           <div className="border-t border-gray-100" />
           <p className="px-3 pt-1.5 pb-0.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Etiquetas permanentes</p>
-          {available.map((lbl, i) => (
-            <button key={lbl.id} onMouseDown={e => { e.preventDefault(); onAdd(weekKey, lbl.id); onClose() }}
-              className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-              <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${pillStyle(i)}`}>{lbl.emoji} {lbl.label}</span>
-            </button>
-          ))}
+          {available.map(lbl => {
+            const colorIdx = summaryLabels.indexOf(lbl)
+            return (
+              <button key={lbl.id} onClick={() => { onAdd(weekKey, lbl.id); onClose() }}
+                className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${pillStyle(colorIdx)}`}>{lbl.emoji} {lbl.label}</span>
+              </button>
+            )
+          })}
           <div className="pb-1" />
         </>
       )}
@@ -489,6 +497,7 @@ function MonthlySummary({ summaries, updateSummary, summaryLabels, updateSummary
                     <TagDropdown
                       weekKey={wKey}
                       available={available}
+                      summaryLabels={summaryLabels}
                       onAdd={(wk, id) => toggleTag(wk, id)}
                       onAddNote={(wk, text) => addNote(wk, text)}
                       onClose={() => setOpenDropdown(null)}
