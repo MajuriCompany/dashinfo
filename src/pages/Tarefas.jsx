@@ -199,22 +199,92 @@ function TypeLegend({ taskTypes, onUpdate, onAdd, onRemove }) {
 
 // ── Monthly summary ───────────────────────────────────────────────────────────
 
-function TagDropdown({ weekKey, available, labelColors, onAdd, onClose }) {
+function ObsCell({ obs, onSave }) {
+  const [editing, setEditing] = useState(false)
+  const [val, setVal] = useState('')
+
+  function open() { setVal(obs); setEditing(true) }
+  function save() { onSave(val); setEditing(false) }
+
+  if (editing) return (
+    <textarea
+      autoFocus
+      value={val}
+      onChange={e => setVal(e.target.value)}
+      onBlur={save}
+      onKeyDown={e => {
+        if (e.key === 'Escape') setEditing(false)
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); save() }
+      }}
+      rows={2}
+      placeholder="Observação da semana…"
+      className="w-44 shrink-0 text-xs text-gray-600 border border-blue-300 rounded-lg px-2 py-1 focus:outline-none resize-none leading-relaxed"
+    />
+  )
+
+  return (
+    <button
+      onClick={open}
+      className={`w-44 shrink-0 text-xs text-left px-2 py-1 rounded-lg hover:bg-gray-100 transition-colors ${obs ? 'text-gray-500' : 'text-gray-300'}`}
+    >
+      {obs
+        ? <span className="line-clamp-2 leading-snug">{obs}</span>
+        : <span className="flex items-center gap-1"><Pencil className="w-3 h-3" /><span>Observação</span></span>
+      }
+    </button>
+  )
+}
+
+function TagDropdown({ weekKey, available, onAdd, onAddNote, onClose }) {
   const ref = useRef(null)
+  const [noteText, setNoteText] = useState('')
+
   useEffect(() => {
     function handle(e) { if (ref.current && !ref.current.contains(e.target)) onClose() }
     document.addEventListener('mousedown', handle)
     return () => document.removeEventListener('mousedown', handle)
   }, [onClose])
-  if (!available.length) return null
+
+  function submitNote() {
+    if (noteText.trim()) { onAddNote(weekKey, noteText.trim()); onClose() }
+  }
+
   return (
-    <div ref={ref} className="absolute z-30 top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[160px]">
-      {available.map((lbl, i) => (
-        <button key={lbl.id} onMouseDown={e => { e.preventDefault(); onAdd(weekKey, lbl.id); onClose() }}
-          className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-          <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${pillStyle(i)}`}>{lbl.emoji} {lbl.label}</span>
-        </button>
-      ))}
+    <div ref={ref} className="absolute z-30 top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg min-w-[230px]">
+      <div className="px-3 pt-2.5 pb-2">
+        <div className="flex items-center gap-1.5">
+          <input
+            autoFocus
+            placeholder="Nota rápida desta semana…"
+            value={noteText}
+            onChange={e => setNoteText(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') submitNote(); if (e.key === 'Escape') onClose() }}
+            className="flex-1 text-xs border border-gray-200 rounded-md px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 placeholder-gray-300"
+          />
+          <button
+            onMouseDown={e => e.preventDefault()}
+            onClick={submitNote}
+            disabled={!noteText.trim()}
+            className="text-emerald-500 hover:text-emerald-600 disabled:opacity-30 transition-opacity"
+          >
+            <Check className="w-3.5 h-3.5" />
+          </button>
+        </div>
+        <p className="text-[10px] text-gray-400 mt-1">Só nesta semana · Enter para adicionar</p>
+      </div>
+      {available.length > 0 && (
+        <>
+          <div className="border-t border-gray-100" />
+          <p className="px-3 pt-1.5 pb-0.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Etiquetas permanentes</p>
+          {available.map((lbl, i) => (
+            <button key={lbl.id} onMouseDown={e => { e.preventDefault(); onAdd(weekKey, lbl.id); onClose() }}
+              className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+              <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${pillStyle(i)}`}>{lbl.emoji} {lbl.label}</span>
+            </button>
+          ))}
+          <div className="pb-1" />
+        </>
+      )}
     </div>
   )
 }
@@ -300,6 +370,16 @@ function MonthlySummary({ summaries, updateSummary, summaryLabels, updateSummary
 
   function saveObs(weekKey, obs) { updateSummary(weekKey, { obs }) }
 
+  function addNote(weekKey, text) {
+    const curr = Array.isArray(summaries[weekKey]?.notes) ? summaries[weekKey].notes : []
+    updateSummary(weekKey, { notes: [...curr, text] })
+  }
+
+  function removeNote(weekKey, idx) {
+    const curr = Array.isArray(summaries[weekKey]?.notes) ? summaries[weekKey].notes : []
+    updateSummary(weekKey, { notes: curr.filter((_, i) => i !== idx) })
+  }
+
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
 
@@ -333,6 +413,7 @@ function MonthlySummary({ summaries, updateSummary, summaryLabels, updateSummary
           const isNow     = wKey === currentWeekKey
           const summary   = summaries[wKey] || {}
           const tags      = Array.isArray(summary.tags) ? summary.tags : []
+          const notes     = Array.isArray(summary.notes) ? summary.notes : []
           const obs       = typeof summary.obs === 'string' ? summary.obs : ''
           const available = summaryLabels.filter(l => !tags.includes(l.id))
 
@@ -389,35 +470,35 @@ function MonthlySummary({ summaries, updateSummary, summaryLabels, updateSummary
                   )
                 })}
 
-                {available.length > 0 && (
-                  <div className="relative">
-                    <button
-                      onClick={() => setOpenDropdown(openDropdown === wKey ? null : wKey)}
-                      className="w-6 h-6 flex items-center justify-center rounded-full border border-dashed border-gray-300 text-gray-400 hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50 transition-colors"
-                    >
-                      <Plus className="w-3 h-3" />
+                {notes.map((note, i) => (
+                  <span key={i} className="inline-flex items-center gap-1 pl-2 pr-1 py-[3px] rounded-full text-[11px] font-medium border border-dashed border-gray-300 text-gray-500 bg-white italic">
+                    <span className="leading-none">{note}</span>
+                    <button onClick={() => removeNote(wKey, i)} className="rounded-full hover:bg-gray-200 p-[2px] leading-none ml-0.5 not-italic">
+                      <X className="w-2.5 h-2.5" />
                     </button>
-                    {openDropdown === wKey && (
-                      <TagDropdown
-                        weekKey={wKey}
-                        available={available}
-                        labelColors={{}}
-                        onAdd={(wk, id) => toggleTag(wk, id)}
-                        onClose={() => setOpenDropdown(null)}
-                      />
-                    )}
-                  </div>
-                )}
+                  </span>
+                ))}
+                <div className="relative">
+                  <button
+                    onClick={() => setOpenDropdown(openDropdown === wKey ? null : wKey)}
+                    className="w-6 h-6 flex items-center justify-center rounded-full border border-dashed border-gray-300 text-gray-400 hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50 transition-colors"
+                  >
+                    <Plus className="w-3 h-3" />
+                  </button>
+                  {openDropdown === wKey && (
+                    <TagDropdown
+                      weekKey={wKey}
+                      available={available}
+                      onAdd={(wk, id) => toggleTag(wk, id)}
+                      onAddNote={(wk, text) => addNote(wk, text)}
+                      onClose={() => setOpenDropdown(null)}
+                    />
+                  )}
+                </div>
               </div>
 
-              {/* Obs input */}
-              <input
-                defaultValue={obs}
-                key={`${wKey}-obs`}
-                onBlur={e => saveObs(wKey, e.target.value)}
-                placeholder="Observação…"
-                className="w-52 shrink-0 text-xs text-gray-600 placeholder-gray-300 bg-transparent border-0 border-b border-gray-200 pb-0.5 focus:outline-none focus:border-blue-400 transition-colors"
-              />
+              {/* Obs cell */}
+              <ObsCell key={`${wKey}-obs`} obs={obs} onSave={val => saveObs(wKey, val)} />
             </div>
           )
         })}
