@@ -235,7 +235,7 @@ function ObsCell({ obs, onSave }) {
   )
 }
 
-function TagDropdown({ weekKey, available, summaryLabels, onAdd, onAddNote, onClose }) {
+function TagDropdown({ weekKey, available, summaryLabels, onAdd, onAddNote, onClose, dropTop, dropLeft }) {
   const ref     = useRef(null)
   const inputRef = useRef(null)
   const [noteText, setNoteText] = useState('')
@@ -255,7 +255,7 @@ function TagDropdown({ weekKey, available, summaryLabels, onAdd, onAddNote, onCl
   }
 
   return (
-    <div ref={ref} className="absolute z-30 top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg min-w-[230px]">
+    <div ref={ref} style={{ position: 'fixed', top: dropTop, left: dropLeft }} className="z-[9999] bg-white border border-gray-200 rounded-lg shadow-lg min-w-[230px]">
       <div className="px-3 pt-2.5 pb-2">
         <div className="flex items-center gap-1.5">
           <input
@@ -362,7 +362,7 @@ function SummaryLabelEditor({ labels, onUpdate, onAdd, onRemove }) {
 function MonthlySummary({ summaries, updateSummary, summaryLabels, updateSummaryLabel, addSummaryLabel, removeSummaryLabel, currentWeekKey, todayStr }) {
   const today = useMemo(() => new Date(), [])
   const [monthOffset,  setMonthOffset]  = useState(0)
-  const [openDropdown, setOpenDropdown] = useState(null)
+  const [openDropdown, setOpenDropdown] = useState(null) // null | { weekKey, top, left }
   const [showEditor,   setShowEditor]   = useState(false)
 
   const currentMonth = useMemo(() => new Date(today.getFullYear(), today.getMonth() + monthOffset, 1), [today, monthOffset])
@@ -486,24 +486,31 @@ function MonthlySummary({ summaries, updateSummary, summaryLabels, updateSummary
                     </button>
                   </span>
                 ))}
-                <div className="relative">
-                  <button
-                    onClick={() => setOpenDropdown(openDropdown === wKey ? null : wKey)}
-                    className="w-6 h-6 flex items-center justify-center rounded-full border border-dashed border-gray-300 text-gray-400 hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50 transition-colors"
-                  >
-                    <Plus className="w-3 h-3" />
-                  </button>
-                  {openDropdown === wKey && (
-                    <TagDropdown
-                      weekKey={wKey}
-                      available={available}
-                      summaryLabels={summaryLabels}
-                      onAdd={(wk, id) => toggleTag(wk, id)}
-                      onAddNote={(wk, text) => addNote(wk, text)}
-                      onClose={() => setOpenDropdown(null)}
-                    />
-                  )}
-                </div>
+                <button
+                  onClick={e => {
+                    if (openDropdown?.weekKey === wKey) {
+                      setOpenDropdown(null)
+                    } else {
+                      const r = e.currentTarget.getBoundingClientRect()
+                      setOpenDropdown({ weekKey: wKey, top: r.bottom + 4, left: r.left })
+                    }
+                  }}
+                  className="w-6 h-6 flex items-center justify-center rounded-full border border-dashed border-gray-300 text-gray-400 hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50 transition-colors"
+                >
+                  <Plus className="w-3 h-3" />
+                </button>
+                {openDropdown?.weekKey === wKey && (
+                  <TagDropdown
+                    weekKey={wKey}
+                    available={available}
+                    summaryLabels={summaryLabels}
+                    onAdd={(wk, id) => toggleTag(wk, id)}
+                    onAddNote={(wk, text) => addNote(wk, text)}
+                    onClose={() => setOpenDropdown(null)}
+                    dropTop={openDropdown.top}
+                    dropLeft={openDropdown.left}
+                  />
+                )}
               </div>
 
               {/* Obs cell */}
