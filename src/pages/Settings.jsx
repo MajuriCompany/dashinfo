@@ -9,6 +9,7 @@ import DiagnosticPanel from '../components/DiagnosticPanel'
 const EMPTY_OFFER = {
   id: '', name: '', status: 'active', color: '#2563eb',
   resultSheetId: '', resultTab: '', metaSheetId: '', metaTab: '',
+  oldMetaSheetId: '', oldMetaTab: '',
   metaCurrency: 'USD', metaCampaignFilter: '',
   startDate: '',
   frontProduct: '', otherProducts: [],
@@ -27,6 +28,7 @@ export default function Settings() {
   const [showForm,         setShowForm]         = useState(false)
   const [editOffer,        setEditOffer]        = useState(null)
   const [form,             setForm]             = useState(EMPTY_OFFER)
+  const [showOldSheet,     setShowOldSheet]     = useState(false)
   const [unmapped,         setUnmapped]         = useState([])
   const [buyersProducts,   setBuyersProducts]   = useState([])
   const [loadingBuyers,    setLoadingBuyers]    = useState(false)
@@ -109,6 +111,7 @@ export default function Settings() {
   function openAddForm() {
     setForm(EMPTY_OFFER)
     setEditOffer(null)
+    setShowOldSheet(false)
     setShowForm(true)
   }
 
@@ -118,6 +121,7 @@ export default function Settings() {
       : (offer.frontProduct || '')
     setForm({ ...offer, frontProduct: frontProductStr, otherProducts: offer.otherProducts || [] })
     setEditOffer(offer.id)
+    setShowOldSheet(!!(offer.oldMetaSheetId))
     setShowForm(true)
   }
 
@@ -363,6 +367,46 @@ export default function Settings() {
                   />
                 </div>
               ))}
+              {/* Planilha Meta antiga (opcional) */}
+              <div className="col-span-2">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={showOldSheet}
+                    onChange={e => {
+                      setShowOldSheet(e.target.checked)
+                      if (!e.target.checked) setForm(p => ({ ...p, oldMetaSheetId: '', oldMetaTab: '' }))
+                    }}
+                  />
+                  <span className="text-xs text-gray-600 font-medium">
+                    Combinar com planilha Meta antiga
+                  </span>
+                  <span className="text-xs text-gray-400">(dados históricos de outra planilha)</span>
+                </label>
+              </div>
+              {showOldSheet && (
+                <>
+                  <div>
+                    <label className="text-gray-500 block mb-0.5">ID Planilha Meta Ads (antiga)</label>
+                    <input
+                      className="border rounded px-2 py-1 w-full text-xs font-mono"
+                      placeholder="ID da planilha antiga"
+                      value={form.oldMetaSheetId || ''}
+                      onChange={e => setForm(p => ({ ...p, oldMetaSheetId: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-gray-500 block mb-0.5">Aba Meta antiga (ex: Página1)</label>
+                    <input
+                      className="border rounded px-2 py-1 w-full text-xs"
+                      placeholder="nome da aba"
+                      value={form.oldMetaTab || ''}
+                      onChange={e => setForm(p => ({ ...p, oldMetaTab: e.target.value }))}
+                    />
+                  </div>
+                </>
+              )}
+
               <div className="col-span-2">
                 <label className="text-gray-500 block mb-0.5">
                   Filtro de campanha Meta (palavras-chave separadas por vírgula)

@@ -290,22 +290,31 @@ export function mergeOfferData(offerRows, metaRows, getRateForDate, buyersData, 
 // FETCH de uma oferta
 // ---------------------------------------------------------------------------
 export async function fetchOfferData(offer, apiKey, getRateForDate, buyersDataByOffer = {}) {
-  const [offerRows, metaRows] = await Promise.all([
+  const campaignFilter = offer.metaCampaignFilter
+    ? offer.metaCampaignFilter.split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
+    : null
+
+  const [offerRows, metaRows, oldMetaRows] = await Promise.all([
     fetchRange(offer.resultSheetId, `${offer.resultTab}!A:N`, apiKey)
       .then(parseOfferResultRows)
       .catch(e => { console.error(`[OFERTA] ${offer.name}:`, e.message); return [] }),
 
     fetchRange(offer.metaSheetId, `${offer.metaTab}!A:Z`, apiKey)
-      .then(rows => parseMetaRows(rows,
-        offer.metaCampaignFilter
-          ? offer.metaCampaignFilter.split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
-          : null
-      ))
+      .then(rows => parseMetaRows(rows, campaignFilter))
       .catch(e => { console.error(`[META] ${offer.name}:`, e.message); return [] }),
+
+    offer.oldMetaSheetId
+      ? fetchRange(offer.oldMetaSheetId, `${offer.oldMetaTab || offer.metaTab}!A:Z`, apiKey)
+          .then(rows => parseMetaRows(rows, campaignFilter))
+          .catch(e => { console.warn(`[META-OLD] ${offer.name}:`, e.message); return [] })
+      : Promise.resolve([]),
   ])
 
+  // old rows first → new rows overwrite for overlapping dates in mergeOfferData
+  const allMetaRows = [...oldMetaRows, ...metaRows]
+
   const buyers = buyersDataByOffer[offer.id] || null
-  return mergeOfferData(offerRows, metaRows, getRateForDate, buyers, offer.metaCurrency || 'USD')
+  return mergeOfferData(offerRows, allMetaRows, getRateForDate, buyers, offer.metaCurrency || 'USD')
 }
 
 // ---------------------------------------------------------------------------
