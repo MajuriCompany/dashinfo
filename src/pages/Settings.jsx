@@ -9,7 +9,7 @@ import DiagnosticPanel from '../components/DiagnosticPanel'
 const EMPTY_OFFER = {
   id: '', name: '', status: 'active', color: '#2563eb',
   resultSheetId: '', resultTab: '', metaSheetId: '', metaTab: '',
-  oldMetaSheetId: '', oldMetaTab: '',
+  oldMetaSheetId: '', oldMetaTab: '', oldMetaUntil: '',
   metaCurrency: 'USD', metaCampaignFilter: '',
   startDate: '',
   frontProduct: '', otherProducts: [],
@@ -403,6 +403,20 @@ export default function Settings() {
                       value={form.oldMetaTab || ''}
                       onChange={e => setForm(p => ({ ...p, oldMetaTab: e.target.value }))}
                     />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="text-gray-500 block mb-0.5">
+                      Usar planilha antiga ATÉ (inclusive) — planilha nova a partir do dia seguinte
+                    </label>
+                    <input
+                      type="date"
+                      className="border rounded px-2 py-1 text-xs"
+                      value={form.oldMetaUntil || ''}
+                      onChange={e => setForm(p => ({ ...p, oldMetaUntil: e.target.value }))}
+                    />
+                    <p className="text-[10px] text-gray-400 mt-0.5">
+                      Ex: 14/06/2026 → dados antigos até 14/06, dados novos de 15/06 em diante
+                    </p>
                   </div>
                 </>
               )}

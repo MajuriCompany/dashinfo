@@ -310,8 +310,17 @@ export async function fetchOfferData(offer, apiKey, getRateForDate, buyersDataBy
       : Promise.resolve([]),
   ])
 
-  // old rows first → new rows overwrite for overlapping dates in mergeOfferData
-  const allMetaRows = [...oldMetaRows, ...metaRows]
+  // Se há data de corte: old sheet apenas até essa data, new sheet a partir do dia seguinte
+  let filteredOld = oldMetaRows
+  let filteredNew = metaRows
+  if (offer.oldMetaUntil) {
+    const cutoff = new Date(offer.oldMetaUntil + 'T23:59:59')
+    const from   = new Date(offer.oldMetaUntil + 'T00:00:00')
+    from.setDate(from.getDate() + 1) // dia seguinte
+    filteredOld = oldMetaRows.filter(r => r.date <= cutoff)
+    filteredNew = metaRows.filter(r => r.date >= from)
+  }
+  const allMetaRows = [...filteredOld, ...filteredNew]
 
   const buyers = buyersDataByOffer[offer.id] || null
   return mergeOfferData(offerRows, allMetaRows, getRateForDate, buyers, offer.metaCurrency || 'USD')
