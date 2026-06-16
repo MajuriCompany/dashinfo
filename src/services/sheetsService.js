@@ -4,6 +4,15 @@ import { RESULTADO_GERAL_ID } from '../config/defaultConfig'
 const BASE = 'https://sheets.googleapis.com/v4/spreadsheets'
 const cache = new Map()
 const CACHE_TTL = 10 * 60 * 1000
+// Erros transitórios (timeout, instabilidade de rede, rate limit, falha temporária do Google) — vale tentar de novo.
+// Erros de configuração (planilha/range/permissão errados) não se resolvem com retry.
+const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504])
+
+class NonRetryableError extends Error {}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
 
 function fetchWithTimeout(url, ms = 15000) {
   const ctrl = new AbortController()
@@ -11,7 +20,7 @@ function fetchWithTimeout(url, ms = 15000) {
   return fetch(url, { signal: ctrl.signal }).finally(() => clearTimeout(id))
 }
 
-async function fetchRange(sheetId, range, apiKey) {
+async function fetchRange(sheetId, range, apiKey, attempts = 3) {
   const key = `${sheetId}||${range}`
   const cached = cache.get(key)
   if (cached && Date.now() - cached.ts < CACHE_TTL) return cached.data
@@ -19,12 +28,25 @@ async function fetchRange(sheetId, range, apiKey) {
   // Only encode spaces — keep ' and ! literal (needed for Sheets range syntax)
   const encodedRange = range.replace(/ /g, '%20')
   const url = `${BASE}/${sheetId}/values/${encodedRange}?key=${apiKey}&valueRenderOption=FORMATTED_VALUE`
-  const res = await fetchWithTimeout(url)
-  if (!res.ok) throw new Error(`Sheets API ${res.status}: ${res.statusText}`)
-  const json = await res.json()
-  const data = json.values || []
-  cache.set(key, { data, ts: Date.now() })
-  return data
+
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      const res = await fetchWithTimeout(url)
+      if (!res.ok) {
+        const msg = `Sheets API ${res.status}: ${res.statusText}`
+        throw RETRYABLE_STATUS.has(res.status) ? new Error(msg) : new NonRetryableError(msg)
+      }
+      const json = await res.json()
+      const data = json.values || []
+      cache.set(key, { data, ts: Date.now() })
+      return data
+    } catch (e) {
+      const isLastAttempt = attempt === attempts
+      if (e instanceof NonRetryableError || isLastAttempt) throw e
+      console.warn(`[SHEETS] tentativa ${attempt} falhou (${e.message}), tentando de novo...`, sheetId, range)
+      await sleep(700 * attempt)
+    }
+  }
 }
 
 export function invalidateCache() { cache.clear() }
