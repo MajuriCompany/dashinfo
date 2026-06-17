@@ -11,7 +11,10 @@ const CustomTooltip = ({ active, payload, label }) => {
   return (
     <div className="bg-white border border-gray-200 rounded-lg shadow-lg px-3 py-2 text-xs space-y-1">
       <p className="font-semibold text-gray-700 max-w-[200px] truncate">{label}</p>
-      <p className="text-indigo-600">Vendas: <strong>{d?.vendas}</strong> ({d?.pctVendas?.toFixed(1)}%)</p>
+      {d?.isFront
+        ? <p className="text-indigo-600">% das vendas: <strong>{d?.pctVendas?.toFixed(1)}%</strong></p>
+        : <p className="text-indigo-600">Conv. de front: <strong>{d?.pctVendas?.toFixed(1)}%</strong> ({d?.vendas} de {d?.frontVendas})</p>
+      }
       <p className="text-emerald-600">Faturamento: <strong>{fmt.brl(d?.faturamento)}</strong> ({d?.pctFat?.toFixed(1)}%)</p>
     </div>
   )
@@ -33,15 +36,21 @@ export default function UpsellChart({ productRows, range }) {
     const items      = Object.values(agg)
     const totalVendas = items.reduce((s, p) => s + p.vendas, 0)
     const totalFat   = items.reduce((s, p) => s + p.faturamento, 0)
+    // vendas front = base para calcular conversão dos upsells
+    const frontVendas = items.filter(p => p.isFront).reduce((s, p) => s + p.vendas, 0)
 
     return items
       .map(p => ({
         ...p,
         name: p.product,
-        pctVendas: totalVendas > 0 ? (p.vendas / totalVendas) * 100 : 0,
-        pctFat:    totalFat    > 0 ? (p.faturamento / totalFat)  * 100 : 0,
+        // Front: % do total de vendas | Upsell: conversão de front (upsell/front × 100)
+        pctVendas: p.isFront
+          ? (totalVendas > 0 ? (p.vendas / totalVendas) * 100 : 0)
+          : (frontVendas > 0 ? (p.vendas / frontVendas) * 100 : 0),
+        pctFat:      totalFat > 0 ? (p.faturamento / totalFat) * 100 : 0,
         totalVendas,
         totalFat,
+        frontVendas,
       }))
       .sort((a, b) => b.pctVendas - a.pctVendas)
   }, [productRows, range])
@@ -59,12 +68,11 @@ export default function UpsellChart({ productRows, range }) {
           <p className="text-[11px] text-gray-400">{totalVendas} vendas · {fmt.brl(totalFat)} faturado</p>
         </div>
         <div className="flex items-center gap-3 text-[11px] text-gray-500">
-          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-indigo-500 shrink-0" />% Vendas</span>
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-indigo-500 shrink-0" />% Vend. / Conv.</span>
           <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-500 shrink-0" />% Faturamento</span>
         </div>
       </div>
 
-      {/* Gráfico de barras */}
       <ResponsiveContainer width="100%" height={Math.max(120, data.length * 52)}>
         <BarChart
           data={data}
@@ -84,49 +92,38 @@ export default function UpsellChart({ productRows, range }) {
             tickFormatter={v => v.length > 22 ? v.slice(0, 21) + '…' : v}
           />
           <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f9fafb' }} />
-          <Bar dataKey="pctVendas" name="% Vendas" radius={[0, 3, 3, 0]} fill="#6366f1">
-            {data.map((_, i) => <Cell key={i} fill={data[i].isFront ? '#6366f1' : '#a5b4fc'} />)}
+          <Bar dataKey="pctVendas" name="% Vend. / Conv." radius={[0, 3, 3, 0]}>
+            {data.map((d, i) => <Cell key={i} fill={d.isFront ? '#6366f1' : '#a5b4fc'} />)}
             <LabelList dataKey="pctVendas" position="right" formatter={v => `${v.toFixed(0)}%`} style={{ fontSize: 10, fill: '#6b7280' }} />
           </Bar>
-          <Bar dataKey="pctFat" name="% Faturamento" radius={[0, 3, 3, 0]} fill="#10b981">
-            {data.map((_, i) => <Cell key={i} fill={data[i].isFront ? '#10b981' : '#6ee7b7'} />)}
+          <Bar dataKey="pctFat" name="% Faturamento" radius={[0, 3, 3, 0]}>
+            {data.map((d, i) => <Cell key={i} fill={d.isFront ? '#10b981' : '#6ee7b7'} />)}
             <LabelList dataKey="pctFat" position="right" formatter={v => `${v.toFixed(0)}%`} style={{ fontSize: 10, fill: '#6b7280' }} />
           </Bar>
         </BarChart>
       </ResponsiveContainer>
 
       {/* Tabela resumo */}
-      {(() => {
-        const frontVendas = data.find(p => p.isFront)?.vendas ?? 0
-        return (
-          <div className="mt-3 border-t border-gray-100 pt-3 space-y-2">
-            {data.map((p, i) => {
-              const txConv = !p.isFront && frontVendas > 0 ? (p.vendas / frontVendas) * 100 : null
-              return (
-                <div key={p.product} className="flex items-center gap-2 text-xs">
-                  <span
-                    className="w-2 h-2 rounded-full shrink-0"
-                    style={{ backgroundColor: p.isFront ? COLORS[0] : COLORS[(i % (COLORS.length - 1)) + 1] }}
-                  />
-                  <span className="flex-1 text-gray-700 truncate" title={p.product}>{p.product}</span>
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${p.isFront ? 'bg-indigo-50 text-indigo-600' : 'bg-gray-100 text-gray-500'}`}>
-                    {p.isFront ? 'Front' : 'Up/Bump'}
-                  </span>
-                  {txConv != null && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-amber-50 text-amber-600 whitespace-nowrap">
-                      conv. {txConv.toFixed(1)}%
-                    </span>
-                  )}
-                  <span className="text-gray-500 w-16 text-right">{p.vendas} vend.</span>
-                  <span className="font-semibold text-indigo-600 w-10 text-right">{p.pctVendas.toFixed(1)}%</span>
-                  <span className="text-gray-500 w-20 text-right">{fmt.brl(p.faturamento)}</span>
-                  <span className="font-semibold text-emerald-600 w-10 text-right">{p.pctFat.toFixed(1)}%</span>
-                </div>
-              )
-            })}
+      <div className="mt-3 border-t border-gray-100 pt-3 space-y-2">
+        {data.map((p, i) => (
+          <div key={p.product} className="flex items-center gap-2 text-xs">
+            <span
+              className="w-2 h-2 rounded-full shrink-0"
+              style={{ backgroundColor: p.isFront ? COLORS[0] : COLORS[(i % (COLORS.length - 1)) + 1] }}
+            />
+            <span className="flex-1 text-gray-700 truncate" title={p.product}>{p.product}</span>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${p.isFront ? 'bg-indigo-50 text-indigo-600' : 'bg-gray-100 text-gray-500'}`}>
+              {p.isFront ? 'Front' : 'Up/Bump'}
+            </span>
+            <span className="text-gray-500 w-16 text-right">{p.vendas} vend.</span>
+            <span className="font-semibold text-indigo-600 w-14 text-right">
+              {p.isFront ? `${p.pctVendas.toFixed(1)}%` : `conv. ${p.pctVendas.toFixed(1)}%`}
+            </span>
+            <span className="text-gray-500 w-20 text-right">{fmt.brl(p.faturamento)}</span>
+            <span className="font-semibold text-emerald-600 w-10 text-right">{p.pctFat.toFixed(1)}%</span>
           </div>
-        )
-      })()}
+        ))}
+      </div>
     </div>
   )
 }

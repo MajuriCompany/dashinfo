@@ -55,6 +55,9 @@ export default function OfferDetail() {
   const [rangeBInput, setRangeBInput]   = useState({ start: '', end: '' })
   const [rangeB, setRangeB]             = useState(null)
 
+  // Front-only mode
+  const [frontOnly, setFrontOnly] = useState(false)
+
   useEffect(() => { setRefreshFn(() => refresh) }, [refresh, setRefreshFn])
 
   useEffect(() => {
@@ -69,6 +72,19 @@ export default function OfferDetail() {
   }, [data, selectedId, range])
 
   const metrics = useMemo(() => calcMetrics(rows, settings.aliquota), [rows, settings.aliquota])
+
+  // Métricas somente front: substitui comissao/faturamento/vendas pelos valores de front
+  const rowsFront = useMemo(() =>
+    rows.map(r => ({
+      ...r,
+      comissao:    r.comissao_front    ?? r.comissao,
+      faturamento: r.faturamento_front ?? r.faturamento,
+      vendas:      r.vendas_front      ?? r.vendas,
+    })),
+    [rows]
+  )
+  const metricsFront = useMemo(() => calcMetrics(rowsFront, settings.aliquota), [rowsFront, settings.aliquota])
+  const m = frontOnly ? metricsFront : metrics
 
   const rowsB = useMemo(() => {
     if (!rangeB) return []
@@ -358,14 +374,30 @@ export default function OfferDetail() {
 
       {/* ── Resultado KPIs ──────────────────────────────────── */}
       <div>
-        <p className="text-xs font-semibold text-gray-400 uppercase mb-2">Resultado</p>
+        <div className="flex items-center gap-3 mb-2">
+          <p className="text-xs font-semibold text-gray-400 uppercase">Resultado</p>
+          <label className="flex items-center gap-1.5 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={frontOnly}
+              onChange={e => setFrontOnly(e.target.checked)}
+              className="rounded"
+            />
+            <span className="text-xs text-gray-500">Somente front</span>
+          </label>
+          {frontOnly && (
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-600 font-medium">
+              upsells excluídos
+            </span>
+          )}
+        </div>
         <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-3">
-          <KPICard label="Fat. Bruto"  value={fmt.brl(metrics.faturamento)}   icon={DollarSign} />
-          <KPICard label="Comissão"    value={fmt.brl(metrics.comissao)}       icon={DollarSign} />
-          <KPICard label="Gasto"       value={fmt.brl(metrics.gasto)}          icon={ShoppingCart} />
-          <KPICard label="Lucro Bruto" value={fmt.brl(metrics.lucro_bruto)}   color={signal('lucro_bruto',   metrics.lucro_bruto)}   icon={TrendingUp} />
-          <KPICard label="Lucro Líq."  value={fmt.brl(metrics.lucro_liquido)} color={signal('lucro_liquido', metrics.lucro_liquido)} icon={TrendingUp} />
-          <KPICard label="ROI"         value={fmt.roi(metrics.roi)}           color={signal('roi', metrics.roi)} />
+          <KPICard label="Fat. Bruto"  value={fmt.brl(m.faturamento)}   icon={DollarSign} />
+          <KPICard label="Comissão"    value={fmt.brl(m.comissao)}       icon={DollarSign} />
+          <KPICard label="Gasto"       value={fmt.brl(metrics.gasto)}    icon={ShoppingCart} />
+          <KPICard label="Lucro Bruto" value={fmt.brl(m.lucro_bruto)}   color={signal('lucro_bruto',   m.lucro_bruto)}   icon={TrendingUp} />
+          <KPICard label="Lucro Líq."  value={fmt.brl(m.lucro_liquido)} color={signal('lucro_liquido', m.lucro_liquido)} icon={TrendingUp} />
+          <KPICard label="ROI"         value={fmt.roi(m.roi)}           color={signal('roi', m.roi)} />
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
           <KPICard label="CPA"            value={fmt.brl(metrics.cpa)}          icon={Target} />
@@ -378,15 +410,15 @@ export default function OfferDetail() {
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
             <p className="text-xs font-bold text-blue-600 uppercase tracking-wide mb-2">Base: Faturamento Bruto</p>
             <div className="grid grid-cols-2 gap-2">
-              <KPICard label="Mg Bruta"   value={fmt.pct((metrics.margem_bruta || 0) * 100)} color={signal('margem_bruta', metrics.margem_bruta)} icon={Percent} />
-              <KPICard label="Mg Líquida" value={fmt.pct((metrics.margem_liq   || 0) * 100)} color={signal('margem_liq',   metrics.margem_liq)}   icon={Percent} />
+              <KPICard label="Mg Bruta"   value={fmt.pct((m.margem_bruta || 0) * 100)} color={signal('margem_bruta', m.margem_bruta)} icon={Percent} />
+              <KPICard label="Mg Líquida" value={fmt.pct((m.margem_liq   || 0) * 100)} color={signal('margem_liq',   m.margem_liq)}   icon={Percent} />
             </div>
           </div>
           <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
             <p className="text-xs font-bold text-purple-600 uppercase tracking-wide mb-2">Base: Comissão</p>
             <div className="grid grid-cols-2 gap-2">
-              <KPICard label="Mg Bruta"   value={fmt.pct((metrics.margem_bruta_comissao || 0) * 100)} color={signal('margem_bruta_comissao', metrics.margem_bruta_comissao)} icon={Percent} />
-              <KPICard label="Mg Líquida" value={fmt.pct((metrics.margem_liq_comissao   || 0) * 100)} color={signal('margem_liq_comissao',   metrics.margem_liq_comissao)}   icon={Percent} />
+              <KPICard label="Mg Bruta"   value={fmt.pct((m.margem_bruta_comissao || 0) * 100)} color={signal('margem_bruta_comissao', m.margem_bruta_comissao)} icon={Percent} />
+              <KPICard label="Mg Líquida" value={fmt.pct((m.margem_liq_comissao   || 0) * 100)} color={signal('margem_liq_comissao',   m.margem_liq_comissao)}   icon={Percent} />
             </div>
           </div>
         </div>

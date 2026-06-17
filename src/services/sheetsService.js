@@ -224,7 +224,7 @@ export async function fetchBuyersDataByOffer(buyersApiKey, offers) {
     // Agregação por data (existente)
     if (!byOffer[offerId]) byOffer[offerId] = {}
     if (!byOffer[offerId][dateKey]) {
-      byOffer[offerId][dateKey] = { faturamento: 0, faturamento_front: 0, comissao: 0, vendas: 0, vendas_front: 0 }
+      byOffer[offerId][dateKey] = { faturamento: 0, faturamento_front: 0, comissao: 0, comissao_front: 0, vendas: 0, vendas_front: 0 }
     }
     byOffer[offerId][dateKey].faturamento  += valor
     byOffer[offerId][dateKey].comissao     += comissaoValor
@@ -232,6 +232,7 @@ export async function fetchBuyersDataByOffer(buyersApiKey, offers) {
     if (isFront) {
       byOffer[offerId][dateKey].vendas_front      += 1
       byOffer[offerId][dateKey].faturamento_front += valor
+      byOffer[offerId][dateKey].comissao_front    += comissaoValor
     }
 
     // Linha bruta por produto (nova)
@@ -259,6 +260,7 @@ export function mergeOfferData(offerRows, metaRows, getRateForDate, buyersData, 
       faturamento:       0,              // apenas buyers sheet (31/03+) preenche
       faturamento_front: 0,
       comissao:          0,
+      comissao_front:    0,
       vendas:       row.vendas,
       vendas_front: row.vendas,
       cpc: null, cpc_ic: null, cpi: null, conv_checkout: null,
@@ -273,6 +275,7 @@ export function mergeOfferData(offerRows, metaRows, getRateForDate, buyersData, 
       byDate[dk].faturamento       = b.faturamento
       byDate[dk].faturamento_front = b.faturamento_front
       byDate[dk].comissao          = b.comissao
+      byDate[dk].comissao_front    = b.comissao_front || 0
       byDate[dk].vendas            = b.vendas
       byDate[dk].vendas_front      = b.vendas_front
     }
