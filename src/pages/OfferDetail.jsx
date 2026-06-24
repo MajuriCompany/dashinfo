@@ -55,8 +55,8 @@ export default function OfferDetail() {
   const [rangeBInput, setRangeBInput]   = useState({ start: '', end: '' })
   const [rangeB, setRangeB]             = useState(null)
 
-  // Front-only mode
-  const [frontOnly, setFrontOnly] = useState(false)
+  // Filtro de produtos: 'all' | 'frontUp1' | 'frontUp2' | 'front'
+  const [filterMode, setFilterMode] = useState('all')
 
   useEffect(() => { setRefreshFn(() => refresh) }, [refresh, setRefreshFn])
 
@@ -73,18 +73,59 @@ export default function OfferDetail() {
 
   const metrics = useMemo(() => calcMetrics(rows, settings.aliquota), [rows, settings.aliquota])
 
-  // Métricas somente front: substitui comissao/faturamento/vendas pelos valores de front
-  const rowsFront = useMemo(() =>
-    rows.map(r => ({
-      ...r,
-      comissao:    r.comissao_front    ?? r.comissao,
-      faturamento: r.faturamento_front ?? r.faturamento,
-      vendas:      r.vendas_front      ?? r.vendas,
-    })),
-    [rows]
-  )
-  const metricsFront = useMemo(() => calcMetrics(rowsFront, settings.aliquota), [rowsFront, settings.aliquota])
-  const m = frontOnly ? metricsFront : metrics
+  const up1Name = (offer?.otherProducts || [])[0] || null
+  const up2Name = (offer?.otherProducts || [])[1] || null
+
+  const filteredRows = useMemo(() => {
+    if (filterMode === 'all') return rows
+
+    const pRows = productRows[selectedId] || []
+    const inPeriod = pRows.filter(r => inRange(r.date, range.start, range.end))
+
+    // Sem dados de produto para o período: usa fallback do pipeline para front, devolve tudo para up1/up2
+    if (!inPeriod.length) {
+      if (filterMode === 'front') {
+        return rows.map(r => ({
+          ...r,
+          comissao:    r.comissao_front    ?? r.comissao,
+          faturamento: r.faturamento_front ?? r.faturamento,
+          vendas:      r.vendas_front      ?? r.vendas,
+        }))
+      }
+      return rows
+    }
+
+    const u1 = (up1Name || '').trim().toLowerCase()
+    const u2 = (up2Name || '').trim().toLowerCase()
+    const keepFn = {
+      front:    r => r.isFront,
+      frontUp1: r => r.isFront || (u1 && r.product.trim().toLowerCase() === u1),
+      frontUp2: r => r.isFront || (u2 && r.product.trim().toLowerCase() === u2),
+    }[filterMode]
+
+    const byDate = {}
+    inPeriod.filter(keepFn).forEach(r => {
+      const dk = r.date.toISOString().split('T')[0]
+      if (!byDate[dk]) byDate[dk] = { comissao: 0, faturamento: 0, faturamento_front: 0, vendas: 0, vendas_front: 0 }
+      byDate[dk].comissao    += r.comissao
+      byDate[dk].faturamento += r.faturamento
+      byDate[dk].vendas      += 1
+      if (r.isFront) {
+        byDate[dk].vendas_front      += 1
+        byDate[dk].faturamento_front += r.faturamento
+      }
+    })
+
+    return rows.map(r => {
+      const dk = r.date.toISOString().split('T')[0]
+      const d  = byDate[dk]
+      return d
+        ? { ...r, ...d }
+        : { ...r, comissao: 0, faturamento: 0, faturamento_front: 0, vendas: 0, vendas_front: 0 }
+    })
+  }, [filterMode, rows, productRows, selectedId, range, up1Name, up2Name])
+
+  const m = useMemo(() => calcMetrics(filteredRows, settings.aliquota), [filteredRows, settings.aliquota])
 
   const rowsB = useMemo(() => {
     if (!rangeB) return []
@@ -374,20 +415,34 @@ export default function OfferDetail() {
 
       {/* ── Resultado KPIs ──────────────────────────────────── */}
       <div>
-        <div className="flex items-center gap-3 mb-2">
+        <div className="flex items-center gap-2 mb-2 flex-wrap">
           <p className="text-xs font-semibold text-gray-400 uppercase">Resultado</p>
-          <label className="flex items-center gap-1.5 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={frontOnly}
-              onChange={e => setFrontOnly(e.target.checked)}
-              className="rounded"
-            />
-            <span className="text-xs text-gray-500">Somente front</span>
-          </label>
-          {frontOnly && (
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-600 font-medium">
-              upsells excluídos
+          <div className="flex gap-0.5 rounded-lg border border-gray-200 p-0.5 bg-gray-50 ml-1">
+            {[
+              { key: 'all',      label: 'Tudo',     title: 'Todos os produtos' },
+              ...(up1Name ? [{ key: 'frontUp1', label: '+Up1', title: up1Name }] : []),
+              ...(up2Name ? [{ key: 'frontUp2', label: '+Up2', title: up2Name }] : []),
+              { key: 'front',    label: 'Só Front', title: 'Somente produto front, sem upsells' },
+            ].map(opt => (
+              <button
+                key={opt.key}
+                onClick={() => setFilterMode(opt.key)}
+                title={opt.title}
+                className={`px-2.5 py-1 rounded text-[11px] font-medium transition-colors ${
+                  filterMode === opt.key
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          {filterMode !== 'all' && (
+            <span className="text-[10px] text-gray-400 italic truncate max-w-[200px]">
+              {filterMode === 'front'    ? 'sem upsells'           :
+               filterMode === 'frontUp1' ? `front + ${up1Name}`    :
+               filterMode === 'frontUp2' ? `front + ${up2Name}`    : ''}
             </span>
           )}
         </div>
