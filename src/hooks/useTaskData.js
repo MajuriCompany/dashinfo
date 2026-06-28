@@ -4,6 +4,7 @@ const TASKS_KEY          = 'dash_tasks'
 const SUMMARY_KEY        = 'dash_task_summaries'
 const TYPES_KEY          = 'dash_task_types'
 const SUMMARY_LABELS_KEY = 'dash_summary_labels'
+const OFFERS_TABLE_KEY   = 'dash_offers_table'
 
 const DEFAULT_TYPES = [
   { id: 'reuniao',  label: 'Reunião',  bg: 'bg-blue-500' },
@@ -27,6 +28,7 @@ export function useTaskData() {
   const [summaries,      setSummaries]      = useState(() => load(SUMMARY_KEY,        {}))
   const [taskTypes,      setTaskTypes]      = useState(() => load(TYPES_KEY,          DEFAULT_TYPES))
   const [summaryLabels,  setSummaryLabels]  = useState(() => load(SUMMARY_LABELS_KEY, DEFAULT_SUMMARY_LABELS))
+  const [offersTable,    setOffersTable]    = useState(() => load(OFFERS_TABLE_KEY,   {}))
 
   const addTask = useCallback((task) => {
     setTasks(prev => { const next = [...prev, { id: Date.now().toString(), ...task }]; persist(TASKS_KEY, next); return next })
@@ -78,10 +80,38 @@ export function useTaskData() {
     })
   }, [])
 
+  const addOffer = useCallback((monthKey) => {
+    setOffersTable(prev => {
+      const curr = Array.isArray(prev[monthKey]) ? prev[monthKey] : []
+      const next = { ...prev, [monthKey]: [...curr, { id: `offer_${Date.now()}`, oferta: '', resultado: '', obs: '' }] }
+      persist(OFFERS_TABLE_KEY, next)
+      return next
+    })
+  }, [])
+
+  const updateOffer = useCallback((monthKey, id, fields) => {
+    setOffersTable(prev => {
+      const curr = Array.isArray(prev[monthKey]) ? prev[monthKey] : []
+      const next = { ...prev, [monthKey]: curr.map(o => o.id === id ? { ...o, ...fields } : o) }
+      persist(OFFERS_TABLE_KEY, next)
+      return next
+    })
+  }, [])
+
+  const removeOffer = useCallback((monthKey, id) => {
+    setOffersTable(prev => {
+      const curr = Array.isArray(prev[monthKey]) ? prev[monthKey] : []
+      const next = { ...prev, [monthKey]: curr.filter(o => o.id !== id) }
+      persist(OFFERS_TABLE_KEY, next)
+      return next
+    })
+  }, [])
+
   return {
     tasks, addTask, updateTask, removeTask,
     summaries, updateSummary,
     taskTypes, updateTaskType, addTaskType, removeTaskType,
     summaryLabels, updateSummaryLabel, addSummaryLabel, removeSummaryLabel,
+    offersTable, addOffer, updateOffer, removeOffer,
   }
 }

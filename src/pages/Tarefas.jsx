@@ -359,7 +359,7 @@ function SummaryLabelEditor({ labels, onUpdate, onAdd, onRemove }) {
   )
 }
 
-function MonthlySummary({ summaries, updateSummary, summaryLabels, updateSummaryLabel, addSummaryLabel, removeSummaryLabel, currentWeekKey, todayStr }) {
+function MonthlySummary({ summaries, updateSummary, summaryLabels, updateSummaryLabel, addSummaryLabel, removeSummaryLabel, offersTable, addOffer, updateOffer, removeOffer, currentWeekKey, todayStr }) {
   const today = useMemo(() => new Date(), [])
   const [monthOffset,  setMonthOffset]  = useState(0)
   const [openDropdown, setOpenDropdown] = useState(null) // null | { weekKey, top, left }
@@ -368,6 +368,8 @@ function MonthlySummary({ summaries, updateSummary, summaryLabels, updateSummary
   const currentMonth = useMemo(() => new Date(today.getFullYear(), today.getMonth() + monthOffset, 1), [today, monthOffset])
   const weeks        = useMemo(() => weeksForMonth(currentMonth.getFullYear(), currentMonth.getMonth()), [currentMonth])
   const monthLabel   = `${MONTHS_PT[currentMonth.getMonth()]} ${currentMonth.getFullYear()}`
+  const monthKey     = format(currentMonth, 'yyyy-MM')
+  const offers       = useMemo(() => Array.isArray(offersTable[monthKey]) ? offersTable[monthKey] : [], [offersTable, monthKey])
 
   function toggleTag(weekKey, tagId) {
     const curr = summaries[weekKey]?.tags
@@ -520,6 +522,15 @@ function MonthlySummary({ summaries, updateSummary, summaryLabels, updateSummary
         })}
       </div>
 
+      {/* Offers table */}
+      <OffersTable
+        monthKey={monthKey}
+        offers={offers}
+        onAdd={addOffer}
+        onUpdate={updateOffer}
+        onRemove={removeOffer}
+      />
+
       {/* Label editor */}
       {showEditor && (
         <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/60">
@@ -535,6 +546,120 @@ function MonthlySummary({ summaries, updateSummary, summaryLabels, updateSummary
   )
 }
 
+// ── Offers table ─────────────────────────────────────────────────────────────
+
+const RESULTADO_OPTIONS = [
+  { value: 'excelente', label: 'Excelente', classes: 'text-emerald-700 bg-emerald-100' },
+  { value: 'bom',       label: 'Bom',       classes: 'text-blue-700 bg-blue-100' },
+  { value: 'medio',     label: 'Médio',     classes: 'text-amber-700 bg-amber-100' },
+  { value: 'ruim',      label: 'Ruim',      classes: 'text-red-700 bg-red-100' },
+]
+
+function OfferRow({ row, onUpdate, onRemove }) {
+  const [editingOferta, setEditingOferta] = useState(false)
+  const [editingObs,    setEditingObs]    = useState(false)
+  const [ofertaVal,     setOfertaVal]     = useState(row.oferta)
+  const [obsVal,        setObsVal]        = useState(row.obs)
+
+  const resultClass = RESULTADO_OPTIONS.find(o => o.value === row.resultado)?.classes ?? 'text-gray-400 bg-gray-100'
+
+  return (
+    <tr className="group border-b border-gray-50 last:border-0">
+      <td className="py-2 pr-4 align-middle">
+        {editingOferta ? (
+          <input
+            autoFocus
+            className="w-full text-sm border border-blue-300 rounded px-2 py-0.5 outline-none focus:ring-1 focus:ring-blue-400"
+            value={ofertaVal}
+            onChange={e => setOfertaVal(e.target.value)}
+            onBlur={() => { setEditingOferta(false); onUpdate({ oferta: ofertaVal }) }}
+            onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') e.currentTarget.blur() }}
+          />
+        ) : (
+          <span onClick={() => setEditingOferta(true)} className="cursor-pointer hover:text-blue-600 block min-h-[22px] text-gray-700 text-sm">
+            {row.oferta || <span className="text-gray-300 text-xs italic">clique para editar</span>}
+          </span>
+        )}
+      </td>
+      <td className="py-2 pr-4 align-middle">
+        <select
+          value={row.resultado || ''}
+          onChange={e => onUpdate({ resultado: e.target.value })}
+          className={`text-xs font-medium px-2.5 py-1 rounded-full cursor-pointer outline-none ${resultClass}`}
+        >
+          <option value="">—</option>
+          {RESULTADO_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+      </td>
+      <td className="py-2 pr-2 align-middle">
+        {editingObs ? (
+          <input
+            autoFocus
+            className="w-full text-sm border border-blue-300 rounded px-2 py-0.5 outline-none focus:ring-1 focus:ring-blue-400"
+            value={obsVal}
+            onChange={e => setObsVal(e.target.value)}
+            onBlur={() => { setEditingObs(false); onUpdate({ obs: obsVal }) }}
+            onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') e.currentTarget.blur() }}
+          />
+        ) : (
+          <span onClick={() => setEditingObs(true)} className="cursor-pointer hover:text-blue-600 block min-h-[22px] text-gray-600 text-sm">
+            {row.obs || <span className="text-gray-300 text-xs italic">adicionar...</span>}
+          </span>
+        )}
+      </td>
+      <td className="py-2 w-8 align-middle">
+        <button onClick={onRemove} className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-all p-1 rounded">
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      </td>
+    </tr>
+  )
+}
+
+function OffersTable({ monthKey, offers, onAdd, onUpdate, onRemove }) {
+  return (
+    <div className="px-6 pt-4 pb-5 border-t border-gray-100">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-semibold text-gray-700">Ofertas do mês</h3>
+        <button
+          onClick={() => onAdd(monthKey)}
+          className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 font-medium px-2 py-1 rounded-lg hover:bg-blue-50 transition-colors"
+        >
+          <Plus className="w-3.5 h-3.5" /> Adicionar
+        </button>
+      </div>
+      <table className="w-full text-sm">
+        <thead>
+          <tr>
+            <th className="text-left text-xs font-medium text-gray-400 pb-2 pr-4 w-[40%]">Ofertas feitas</th>
+            <th className="text-left text-xs font-medium text-gray-400 pb-2 pr-4 w-[18%]">Resultado</th>
+            <th className="text-left text-xs font-medium text-gray-400 pb-2">Observações</th>
+            <th className="w-8" />
+          </tr>
+        </thead>
+        <tbody>
+          {offers.length === 0 ? (
+            <tr>
+              <td colSpan={4} className="py-5 text-center text-xs text-gray-300 italic">
+                Nenhuma oferta registrada — clique em Adicionar para começar
+              </td>
+            </tr>
+          ) : (
+            offers.map(row => (
+              <OfferRow
+                key={row.id}
+                row={row}
+                onUpdate={fields => onUpdate(monthKey, row.id, fields)}
+                onRemove={() => onRemove(monthKey, row.id)}
+              />
+            ))
+          )}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function Tarefas() {
@@ -543,6 +668,7 @@ export default function Tarefas() {
     summaries, updateSummary,
     taskTypes, updateTaskType, addTaskType, removeTaskType,
     summaryLabels, updateSummaryLabel, addSummaryLabel, removeSummaryLabel,
+    offersTable, addOffer, updateOffer, removeOffer,
   } = useTaskData()
 
   const [weekOffset,        setWeekOffset]        = useState(0)
@@ -755,6 +881,10 @@ export default function Tarefas() {
         updateSummaryLabel={updateSummaryLabel}
         addSummaryLabel={addSummaryLabel}
         removeSummaryLabel={removeSummaryLabel}
+        offersTable={offersTable}
+        addOffer={addOffer}
+        updateOffer={updateOffer}
+        removeOffer={removeOffer}
         currentWeekKey={currentWeekKey}
         todayStr={todayStr}
       />
