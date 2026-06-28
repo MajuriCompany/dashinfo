@@ -83,7 +83,7 @@ export function useTaskData() {
   const addOffer = useCallback((monthKey) => {
     setOffersTable(prev => {
       const curr = Array.isArray(prev[monthKey]) ? prev[monthKey] : []
-      const next = { ...prev, [monthKey]: [...curr, { id: `offer_${Date.now()}`, oferta: '', resultado: '', obs: '' }] }
+      const next = { ...prev, [monthKey]: [...curr, { id: `offer_${Date.now()}`, oferta: '', resultado: '', realizado: '', data: '', obs: '' }] }
       persist(OFFERS_TABLE_KEY, next)
       return next
     })
@@ -107,11 +107,26 @@ export function useTaskData() {
     })
   }, [])
 
+  const reorderOffers = useCallback((monthKey, fromId, toId) => {
+    setOffersTable(prev => {
+      const curr = Array.isArray(prev[monthKey]) ? prev[monthKey] : []
+      const fromIdx = curr.findIndex(o => o.id === fromId)
+      const toIdx   = curr.findIndex(o => o.id === toId)
+      if (fromIdx === -1 || toIdx === -1) return prev
+      const next = [...curr]
+      const [removed] = next.splice(fromIdx, 1)
+      next.splice(toIdx, 0, removed)
+      const result = { ...prev, [monthKey]: next }
+      persist(OFFERS_TABLE_KEY, result)
+      return result
+    })
+  }, [])
+
   return {
     tasks, addTask, updateTask, removeTask,
     summaries, updateSummary,
     taskTypes, updateTaskType, addTaskType, removeTaskType,
     summaryLabels, updateSummaryLabel, addSummaryLabel, removeSummaryLabel,
-    offersTable, addOffer, updateOffer, removeOffer,
+    offersTable, addOffer, updateOffer, removeOffer, reorderOffers,
   }
 }
