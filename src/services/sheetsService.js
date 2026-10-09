@@ -20,18 +20,45 @@ function fetchWithTimeout(url, ms = 15000) {
   return fetch(url, { signal: ctrl.signal }).finally(() => clearTimeout(id))
 }
 
-async function fetchRange(sheetId, range, apiKey, attempts = 3) {
+// Limita chamadas simultâneas ao Google — disparar ~20 de uma vez estoura a cota por minuto (429).
+const MAX_CONCURRENT = 4
+let active = 0
+const queue = []
+
+async function withSlot(fn) {
+  if (active >= MAX_CONCURRENT) await new Promise(resolve => queue.push(resolve))
+  active++
+  try { return await fn() } finally {
+    active--
+    queue.shift()?.()
+  }
+}
+
+// Requisições em andamento — se duas partes do app pedem o mesmo range, compartilham a mesma busca.
+const inflight = new Map()
+
+function fetchRange(sheetId, range, apiKey, attempts = 4) {
   const key = `${sheetId}||${range}`
   const cached = cache.get(key)
-  if (cached && Date.now() - cached.ts < CACHE_TTL) return cached.data
+  if (cached && Date.now() - cached.ts < CACHE_TTL) return Promise.resolve(cached.data)
+  if (inflight.has(key)) return inflight.get(key)
 
+  const p = fetchRangeUncached(key, sheetId, range, apiKey, attempts)
+    .finally(() => inflight.delete(key))
+  inflight.set(key, p)
+  return p
+}
+
+async function fetchRangeUncached(key, sheetId, range, apiKey, attempts) {
   // Only encode spaces — keep ' and ! literal (needed for Sheets range syntax)
   const encodedRange = range.replace(/ /g, '%20')
   const url = `${BASE}/${sheetId}/values/${encodedRange}?key=${apiKey}&valueRenderOption=FORMATTED_VALUE`
 
   for (let attempt = 1; attempt <= attempts; attempt++) {
+    let status = 0
     try {
-      const res = await fetchWithTimeout(url)
+      const res = await withSlot(() => fetchWithTimeout(url))
+      status = res.status
       if (!res.ok) {
         const msg = `Sheets API ${res.status}: ${res.statusText}`
         throw RETRYABLE_STATUS.has(res.status) ? new Error(msg) : new NonRetryableError(msg)
@@ -43,13 +70,16 @@ async function fetchRange(sheetId, range, apiKey, attempts = 3) {
     } catch (e) {
       const isLastAttempt = attempt === attempts
       if (e instanceof NonRetryableError || isLastAttempt) throw e
-      console.warn(`[SHEETS] tentativa ${attempt} falhou (${e.message}), tentando de novo...`, sheetId, range)
-      await sleep(700 * attempt)
+      // Backoff exponencial; cota estourada (429) precisa de espera maior pra liberar
+      const base  = status === 429 ? 2000 : 800
+      const delay = base * 2 ** (attempt - 1) + Math.random() * 500
+      console.warn(`[SHEETS] tentativa ${attempt} falhou (${e.message}), tentando de novo em ${Math.round(delay)}ms...`, sheetId, range)
+      await sleep(delay)
     }
   }
 }
 
-export function invalidateCache() { cache.clear() }
+export function invalidateCache() { cache.clear() }  // in-flight continuam válidas
 
 export async function listSheetNames(sheetId, apiKey) {
   const url = `${BASE}/${sheetId}?key=${apiKey}&fields=sheets.properties.title`
@@ -314,7 +344,10 @@ export function mergeOfferData(offerRows, metaRows, getRateForDate, buyersData, 
 // ---------------------------------------------------------------------------
 // FETCH de uma oferta
 // ---------------------------------------------------------------------------
+// Retorna { rows, failures } — failures lista as fontes que não carregaram (ex: ['Meta']),
+// pra quem chama decidir manter o último dado bom em vez de mostrar gasto errado/zerado.
 export async function fetchOfferData(offer, apiKey, getRateForDate, buyersDataByOffer = {}) {
+  const failures = []
   const campaignFilter = offer.metaCampaignFilter
     ? offer.metaCampaignFilter.split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
     : null
@@ -322,16 +355,16 @@ export async function fetchOfferData(offer, apiKey, getRateForDate, buyersDataBy
   const [offerRows, metaRows, oldMetaRows] = await Promise.all([
     fetchRange(offer.resultSheetId, `${offer.resultTab}!A:N`, apiKey)
       .then(parseOfferResultRows)
-      .catch(e => { console.error(`[OFERTA] ${offer.name}:`, e.message); return [] }),
+      .catch(e => { console.error(`[OFERTA] ${offer.name}:`, e.message); failures.push('aba da oferta'); return [] }),
 
     fetchRange(offer.metaSheetId, `${offer.metaTab}!A:Z`, apiKey)
       .then(rows => parseMetaRows(rows, campaignFilter))
-      .catch(e => { console.error(`[META] ${offer.name}:`, e.message); return [] }),
+      .catch(e => { console.error(`[META] ${offer.name}:`, e.message); failures.push('Meta'); return [] }),
 
     offer.oldMetaSheetId
       ? fetchRange(offer.oldMetaSheetId, `${offer.oldMetaTab || offer.metaTab}!A:Z`, apiKey)
           .then(rows => parseMetaRows(rows, campaignFilter))
-          .catch(e => { console.warn(`[META-OLD] ${offer.name}:`, e.message); return [] })
+          .catch(e => { console.warn(`[META-OLD] ${offer.name}:`, e.message); failures.push('Meta antiga'); return [] })
       : Promise.resolve([]),
   ])
 
@@ -348,7 +381,8 @@ export async function fetchOfferData(offer, apiKey, getRateForDate, buyersDataBy
   const allMetaRows = [...filteredOld, ...filteredNew]
 
   const buyers = buyersDataByOffer[offer.id] || null
-  return mergeOfferData(offerRows, allMetaRows, getRateForDate, buyers, offer.metaCurrency || 'USD')
+  const rows = mergeOfferData(offerRows, allMetaRows, getRateForDate, buyers, offer.metaCurrency || 'USD')
+  return { rows, failures }
 }
 
 // ---------------------------------------------------------------------------
@@ -357,6 +391,7 @@ export async function fetchOfferData(offer, apiKey, getRateForDate, buyersDataBy
 export async function fetchAllOffersData(offers, apiKey, getRateForDate, buyersApiKey = '') {
   let buyersDataByOffer = {}
   let productRows = {}
+  let buyersFailed = false
   if (buyersApiKey) {
     try {
       const result = await fetchBuyersDataByOffer(buyersApiKey, offers)
@@ -364,6 +399,7 @@ export async function fetchAllOffersData(offers, apiKey, getRateForDate, buyersA
       productRows       = result.rawRows
     } catch (e) {
       console.warn('[COMPRADORES] Erro:', e.message)
+      buyersFailed = true
     }
   }
 
@@ -372,11 +408,19 @@ export async function fetchAllOffersData(offers, apiKey, getRateForDate, buyersA
   )
 
   const data = {}
+  const failures = {}  // { [offerId]: ['Meta', ...] }
   results.forEach((r, i) => {
-    data[offers[i].id] = r.status === 'fulfilled' ? r.value : []
-    if (r.status === 'rejected') console.error(`[FETCH] ${offers[i].name}:`, r.reason)
+    const id = offers[i].id
+    if (r.status === 'fulfilled') {
+      data[id] = r.value.rows
+      if (r.value.failures.length) failures[id] = r.value.failures
+    } else {
+      data[id] = []
+      failures[id] = ['erro inesperado']
+      console.error(`[FETCH] ${offers[i].name}:`, r.reason)
+    }
   })
-  return { data, productRows }
+  return { data, productRows, failures, buyersFailed }
 }
 
 // ---------------------------------------------------------------------------

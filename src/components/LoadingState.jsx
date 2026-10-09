@@ -35,3 +35,26 @@ export function EmptyState({ message = 'Nenhum dado encontrado para o período.'
     </div>
   )
 }
+
+// Aviso discreto quando alguma planilha não atualizou — os números mostrados são do último carregamento bom.
+export function DataWarnings({ warnings, onRetry, loading }) {
+  if (!warnings?.length) return null
+  return (
+    <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+      <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+      <div className="flex-1">
+        <span className="font-medium">Não atualizou: </span>
+        {warnings.join(' · ')}
+        <span className="text-amber-700"> — mostrando o último valor carregado.</span>
+      </div>
+      <button
+        onClick={onRetry}
+        disabled={loading}
+        className="flex items-center gap-1 shrink-0 font-medium text-amber-900 hover:underline disabled:opacity-50"
+      >
+        <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+        Tentar de novo
+      </button>
+    </div>
+  )
+}

@@ -15,7 +15,7 @@ import GoalProgressBar from '../components/ProgressBar'
 import ProfitLineChart from '../components/charts/ProfitLineChart'
 import OfferBarChart from '../components/charts/OfferBarChart'
 import OfferPieChart from '../components/charts/OfferPieChart'
-import { Spinner, NoApiKey, ErrorState } from '../components/LoadingState'
+import { Spinner, NoApiKey, ErrorState, DataWarnings } from '../components/LoadingState'
 
 const roiClass = roi =>
   roi >= 2 ? 'text-success bg-success-light border-success' :
@@ -26,7 +26,7 @@ export default function Overview() {
   const { settings, apiKey, buyersApiKey, activeOffers, trackedOffers } = useAppConfig()
   const { getGoals } = useMonthlyGoals()
   const { entries: manualEntries, offerSettings: manualOfferSettings } = useManualEntries()
-  const { data, loading, error, refresh }               = useSheetData(activeOffers, settings, apiKey, buyersApiKey)
+  const { data, loading, error, warnings, refresh }     = useSheetData(trackedOffers, settings, apiKey, buyersApiKey)
   const { setRefreshFn }                                = useContext(RefreshContext)
   const [range, setRange]             = useState(getPresetRange('mes_atual'))
   const [todayRate, setTodayRate]     = useState(null)
@@ -187,6 +187,7 @@ export default function Overview() {
 
   return (
     <div className="space-y-5">
+      <DataWarnings warnings={warnings} onRetry={refresh} loading={loading} />
 
       {/* ── Header ── */}
       <div className="flex items-center justify-between gap-3">
