@@ -8,7 +8,7 @@ import { fmt } from '../utils/formatters'
 import { getPresetRange, inRange } from '../utils/dateUtils'
 import { RefreshContext } from '../components/Layout'
 import DateFilter from '../components/DateFilter'
-import { Spinner, NoApiKey, ErrorState, DataWarnings } from '../components/LoadingState'
+import { Spinner, NoApiKey, ErrorState } from '../components/LoadingState'
 import KPICard from '../components/KPICard'
 import { TrendingUp, ShoppingCart, DollarSign, Percent, Plus, Trash2, Pencil, Check, X, ChevronDown, ChevronUp } from 'lucide-react'
 import { useManualEntries } from '../hooks/useManualEntries'
@@ -240,7 +240,7 @@ const EMPTY_FORM = { date: todayStr(), offerName: '', custoClique: '', custoChec
 
 export default function OffersOverview() {
   const { settings, apiKey, buyersApiKey, trackedOffers: activeOffers } = useAppConfig()
-  const { data, productRows, loading, error, warnings, refresh } = useSheetData(activeOffers, settings, apiKey, buyersApiKey)
+  const { data, productRows, loading, error, refresh }   = useSheetData(activeOffers, settings, apiKey, buyersApiKey)
   const { setRefreshFn }                                  = useContext(RefreshContext)
   const { entries, addEntry, updateEntry, removeEntry, offerSettings, setOfferIncludeDash } = useManualEntries()
   const [range, setRange]           = useState(getPresetRange('mes_atual'))
@@ -331,7 +331,6 @@ export default function OffersOverview() {
 
   return (
     <div className="space-y-5">
-      <DataWarnings warnings={warnings} onRetry={refresh} loading={loading} />
       <div>
         <h2 className="text-xl font-bold text-gray-900">Todas as Ofertas</h2>
         <p className="text-xs text-gray-400 mt-0.5">Visão rápida de cada oferta · métricas + distribuição de produtos</p>

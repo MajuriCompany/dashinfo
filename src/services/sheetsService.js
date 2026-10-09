@@ -20,129 +20,36 @@ function fetchWithTimeout(url, ms = 15000) {
   return fetch(url, { signal: ctrl.signal }).finally(() => clearTimeout(id))
 }
 
-// Limita chamadas simultâneas ao Google — disparar ~20 de uma vez estoura a cota por minuto (429).
-const MAX_CONCURRENT = 4
-let active = 0
-const queue = []
+async function fetchRange(sheetId, range, apiKey, attempts = 3) {
+  const key = `${sheetId}||${range}`
+  const cached = cache.get(key)
+  if (cached && Date.now() - cached.ts < CACHE_TTL) return cached.data
 
-// Cota da API key: 60 leituras/min. Mantém margem — nunca passa de MAX_PER_MINUTE na janela de 60s.
-const MAX_PER_MINUTE = 50
-const sentAt = []
+  // Only encode spaces — keep ' and ! literal (needed for Sheets range syntax)
+  const encodedRange = range.replace(/ /g, '%20')
+  const url = `${BASE}/${sheetId}/values/${encodedRange}?key=${apiKey}&valueRenderOption=FORMATTED_VALUE`
 
-async function waitForQuota() {
-  for (;;) {
-    const now = Date.now()
-    while (sentAt.length && now - sentAt[0] >= 60_000) sentAt.shift()
-    if (sentAt.length < MAX_PER_MINUTE) { sentAt.push(now); return }
-    await sleep(60_000 - (now - sentAt[0]) + 50)
-  }
-}
-
-async function withSlot(fn) {
-  if (active >= MAX_CONCURRENT) await new Promise(resolve => queue.push(resolve))
-  active++
-  try {
-    await waitForQuota()
-    return await fn()
-  } finally {
-    active--
-    queue.shift()?.()
-  }
-}
-
-// GET com retry/backoff. Cota estourada (429) zera por minuto — esperas maiores (2s, 4s, 8s, 16s).
-async function requestJson(url, label, attempts = 5) {
   for (let attempt = 1; attempt <= attempts; attempt++) {
-    let status = 0
     try {
-      const res = await withSlot(() => fetchWithTimeout(url))
-      status = res.status
+      const res = await fetchWithTimeout(url)
       if (!res.ok) {
         const msg = `Sheets API ${res.status}: ${res.statusText}`
         throw RETRYABLE_STATUS.has(res.status) ? new Error(msg) : new NonRetryableError(msg)
       }
-      return await res.json()
+      const json = await res.json()
+      const data = json.values || []
+      cache.set(key, { data, ts: Date.now() })
+      return data
     } catch (e) {
       const isLastAttempt = attempt === attempts
       if (e instanceof NonRetryableError || isLastAttempt) throw e
-      const base  = status === 429 ? 2000 : 800
-      const delay = base * 2 ** (attempt - 1) + Math.random() * 500
-      console.warn(`[SHEETS] tentativa ${attempt} falhou (${e.message}), tentando de novo em ${Math.round(delay)}ms...`, label)
-      await sleep(delay)
+      console.warn(`[SHEETS] tentativa ${attempt} falhou (${e.message}), tentando de novo...`, sheetId, range)
+      await sleep(700 * attempt)
     }
   }
 }
 
-// Requisições em andamento — se duas partes do app pedem o mesmo range, compartilham a mesma busca.
-const inflight = new Map()
-// Último valor bom de cada range (não expira) — usado se uma atualização falhar
-const lastGood = new Map()
-// Ranges cujo lote falhou por cota/instabilidade — não refaz individualmente nesta atualização
-const blocked = new Map()
-
-function fetchRange(sheetId, range, apiKey) {
-  const key = `${sheetId}||${range}`
-  const cached = cache.get(key)
-  if (cached && Date.now() - cached.ts < CACHE_TTL) return Promise.resolve(cached.data)
-  if (inflight.has(key)) return inflight.get(key)
-  if (blocked.has(key)) {
-    const err = blocked.get(key)
-    blocked.delete(key)
-    if (lastGood.has(key)) return Promise.resolve(lastGood.get(key))
-    return Promise.reject(err)
-  }
-
-  // Only encode spaces — keep ' and ! literal (needed for Sheets range syntax)
-  const url = `${BASE}/${sheetId}/values/${range.replace(/ /g, '%20')}?key=${apiKey}&valueRenderOption=FORMATTED_VALUE`
-  const p = requestJson(url, `${sheetId} ${range}`)
-    .then(json => storeRange(key, json.values || []))
-    .catch(e => {
-      if (lastGood.has(key)) {
-        console.warn(`[SHEETS] usando último valor bom de ${range} (${e.message})`)
-        return lastGood.get(key)
-      }
-      throw e
-    })
-    .finally(() => inflight.delete(key))
-  inflight.set(key, p)
-  return p
-}
-
-function storeRange(key, data) {
-  cache.set(key, { data, ts: Date.now() })
-  lastGood.set(key, data)
-  return data
-}
-
-// Busca vários ranges da MESMA planilha numa única leitura (values:batchGet = 1 da cota).
-// Só pré-aquece o cache — se falhar (ex: um nome de aba errado), os fetchRange individuais
-// tentam cada range separado depois.
-async function prefetchBatch(sheetId, ranges, apiKey) {
-  const missing = [...new Set(ranges)].filter(r => {
-    const c = cache.get(`${sheetId}||${r}`)
-    return !(c && Date.now() - c.ts < CACHE_TTL)
-  })
-  if (missing.length < 2) return
-
-  const qs  = missing.map(r => `ranges=${encodeURIComponent(r)}`).join('&')
-  const url = `${BASE}/${sheetId}/values:batchGet?key=${apiKey}&valueRenderOption=FORMATTED_VALUE&${qs}`
-  const p   = requestJson(url, `${sheetId} batch(${missing.length})`)
-    .then(json => {
-      ;(json.valueRanges || []).forEach((vr, i) => storeRange(`${sheetId}||${missing[i]}`, vr.values || []))
-    })
-  try { await p } catch (e) {
-    if (e instanceof NonRetryableError) {
-      // Ex: nome de aba errado derruba o lote inteiro — busca uma a uma pra isolar o erro
-      console.warn(`[SHEETS] batch falhou (${e.message}) — buscando abas uma a uma`, sheetId)
-    } else {
-      // Cota estourada/instabilidade: buscar uma a uma só gastaria mais cota
-      console.warn(`[SHEETS] batch falhou (${e.message}) — sem nova tentativa nesta atualização`, sheetId)
-      missing.forEach(r => blocked.set(`${sheetId}||${r}`, e))
-    }
-  }
-}
-
-export function invalidateCache() { cache.clear() }  // in-flight continuam válidas
+export function invalidateCache() { cache.clear() }
 
 export async function listSheetNames(sheetId, apiKey) {
   const url = `${BASE}/${sheetId}?key=${apiKey}&fields=sheets.properties.title`
@@ -407,10 +314,7 @@ export function mergeOfferData(offerRows, metaRows, getRateForDate, buyersData, 
 // ---------------------------------------------------------------------------
 // FETCH de uma oferta
 // ---------------------------------------------------------------------------
-// Retorna { rows, failures } — failures lista as fontes que não carregaram (ex: ['Meta']),
-// pra quem chama decidir manter o último dado bom em vez de mostrar gasto errado/zerado.
 export async function fetchOfferData(offer, apiKey, getRateForDate, buyersDataByOffer = {}) {
-  const failures = []
   const campaignFilter = offer.metaCampaignFilter
     ? offer.metaCampaignFilter.split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
     : null
@@ -418,16 +322,16 @@ export async function fetchOfferData(offer, apiKey, getRateForDate, buyersDataBy
   const [offerRows, metaRows, oldMetaRows] = await Promise.all([
     fetchRange(offer.resultSheetId, `${offer.resultTab}!A:N`, apiKey)
       .then(parseOfferResultRows)
-      .catch(e => { console.error(`[OFERTA] ${offer.name}:`, e.message); failures.push('aba da oferta'); return [] }),
+      .catch(e => { console.error(`[OFERTA] ${offer.name}:`, e.message); return [] }),
 
     fetchRange(offer.metaSheetId, `${offer.metaTab}!A:Z`, apiKey)
       .then(rows => parseMetaRows(rows, campaignFilter))
-      .catch(e => { console.error(`[META] ${offer.name}:`, e.message); failures.push('Meta'); return [] }),
+      .catch(e => { console.error(`[META] ${offer.name}:`, e.message); return [] }),
 
     offer.oldMetaSheetId
       ? fetchRange(offer.oldMetaSheetId, `${offer.oldMetaTab || offer.metaTab}!A:Z`, apiKey)
           .then(rows => parseMetaRows(rows, campaignFilter))
-          .catch(e => { console.warn(`[META-OLD] ${offer.name}:`, e.message); failures.push('Meta antiga'); return [] })
+          .catch(e => { console.warn(`[META-OLD] ${offer.name}:`, e.message); return [] })
       : Promise.resolve([]),
   ])
 
@@ -444,34 +348,15 @@ export async function fetchOfferData(offer, apiKey, getRateForDate, buyersDataBy
   const allMetaRows = [...filteredOld, ...filteredNew]
 
   const buyers = buyersDataByOffer[offer.id] || null
-  const rows = mergeOfferData(offerRows, allMetaRows, getRateForDate, buyers, offer.metaCurrency || 'USD')
-  return { rows, failures }
+  return mergeOfferData(offerRows, allMetaRows, getRateForDate, buyers, offer.metaCurrency || 'USD')
 }
 
 // ---------------------------------------------------------------------------
 // FETCH de todas as ofertas
 // ---------------------------------------------------------------------------
-function offerRanges(offer) {
-  const list = [
-    [offer.resultSheetId, `${offer.resultTab}!A:N`],
-    [offer.metaSheetId,   `${offer.metaTab}!A:Z`],
-  ]
-  if (offer.oldMetaSheetId) list.push([offer.oldMetaSheetId, `${offer.oldMetaTab || offer.metaTab}!A:Z`])
-  return list.filter(([id]) => id)
-}
-
 export async function fetchAllOffersData(offers, apiKey, getRateForDate, buyersApiKey = '') {
-  // Agrupa por planilha e busca em lote — as abas de resultado de todas as ofertas
-  // ficam na mesma planilha: vira 1 leitura em vez de 1 por oferta.
-  const bySheet = {}
-  offers.forEach(o => offerRanges(o).forEach(([id, range]) => {
-    (bySheet[id] ||= []).push(range)
-  }))
-  await Promise.all(Object.entries(bySheet).map(([id, ranges]) => prefetchBatch(id, ranges, apiKey)))
-
   let buyersDataByOffer = {}
   let productRows = {}
-  let buyersFailed = false
   if (buyersApiKey) {
     try {
       const result = await fetchBuyersDataByOffer(buyersApiKey, offers)
@@ -479,7 +364,6 @@ export async function fetchAllOffersData(offers, apiKey, getRateForDate, buyersA
       productRows       = result.rawRows
     } catch (e) {
       console.warn('[COMPRADORES] Erro:', e.message)
-      buyersFailed = true
     }
   }
 
@@ -488,19 +372,11 @@ export async function fetchAllOffersData(offers, apiKey, getRateForDate, buyersA
   )
 
   const data = {}
-  const failures = {}  // { [offerId]: ['Meta', ...] }
   results.forEach((r, i) => {
-    const id = offers[i].id
-    if (r.status === 'fulfilled') {
-      data[id] = r.value.rows
-      if (r.value.failures.length) failures[id] = r.value.failures
-    } else {
-      data[id] = []
-      failures[id] = ['erro inesperado']
-      console.error(`[FETCH] ${offers[i].name}:`, r.reason)
-    }
+    data[offers[i].id] = r.status === 'fulfilled' ? r.value : []
+    if (r.status === 'rejected') console.error(`[FETCH] ${offers[i].name}:`, r.reason)
   })
-  return { data, productRows, failures, buyersFailed }
+  return { data, productRows }
 }
 
 // ---------------------------------------------------------------------------

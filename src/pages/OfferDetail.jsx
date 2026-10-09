@@ -15,7 +15,7 @@ import DateFilter from '../components/DateFilter'
 import ProfitLineChart from '../components/charts/ProfitLineChart'
 import ROIChart from '../components/charts/ROIChart'
 import UpsellChart from '../components/charts/UpsellChart'
-import { Spinner, NoApiKey, ErrorState, EmptyState, DataWarnings } from '../components/LoadingState'
+import { Spinner, NoApiKey, ErrorState, EmptyState } from '../components/LoadingState'
 
 const TODAY = new Date().toISOString().slice(0, 10)
 
@@ -98,7 +98,7 @@ function calcDeltaPct(a, b) {
 
 export default function OfferDetail() {
   const { settings, trackedOffers, apiKey, buyersApiKey } = useAppConfig()
-  const { data, productRows, loading, error, warnings, refresh } = useSheetData(trackedOffers, settings, apiKey, buyersApiKey)
+  const { data, productRows, loading, error, refresh }    = useSheetData(trackedOffers, settings, apiKey, buyersApiKey)
   const { setRefreshFn }                                  = useContext(RefreshContext)
   const [selectedId, setSelectedId]                       = useState(trackedOffers[0]?.id || '')
   const [range, setRange]                                 = useState(getPresetRange('mes_atual'))
@@ -267,7 +267,6 @@ export default function OfferDetail() {
 
   return (
     <div className="space-y-4">
-      <DataWarnings warnings={warnings} onRetry={refresh} loading={loading} />
       {/* Header */}
       <div className="flex items-center gap-3 flex-wrap">
         <h2 className="text-lg font-bold text-gray-800">Detalhe por Oferta</h2>
