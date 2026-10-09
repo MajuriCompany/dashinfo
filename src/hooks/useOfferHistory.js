@@ -9,7 +9,8 @@ function load() {
 export function useOfferHistory() {
   const [history, setHistory] = useState(load)
 
-  const add = useCallback((offerId, { date, note }) => {
+  // snapshot (opcional): { start, end, days, metrics, savedAt } — métricas do período congeladas
+  const add = useCallback((offerId, { date, note, snapshot }) => {
     setHistory(prev => {
       const next = {
         ...prev,
@@ -17,6 +18,7 @@ export function useOfferHistory() {
           id: Date.now().toString(),
           date,
           note: note.trim(),
+          ...(snapshot ? { snapshot } : {}),
         }]
       }
       localStorage.setItem(KEY, JSON.stringify(next))
@@ -24,12 +26,13 @@ export function useOfferHistory() {
     })
   }, [])
 
-  const update = useCallback((offerId, id, { date, note }) => {
+  // patch parcial — ex: { date, note } na edição ou { snapshot } ao recalcular
+  const update = useCallback((offerId, id, patch) => {
     setHistory(prev => {
       const next = {
         ...prev,
         [offerId]: (prev[offerId] || []).map(e =>
-          e.id !== id ? e : { ...e, date, note: note.trim() }
+          e.id !== id ? e : { ...e, ...patch, ...(patch.note != null ? { note: patch.note.trim() } : {}) }
         )
       }
       localStorage.setItem(KEY, JSON.stringify(next))
