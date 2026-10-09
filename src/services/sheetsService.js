@@ -77,12 +77,20 @@ async function requestJson(url, label, attempts = 5) {
 const inflight = new Map()
 // Último valor bom de cada range (não expira) — usado se uma atualização falhar
 const lastGood = new Map()
+// Ranges cujo lote falhou por cota/instabilidade — não refaz individualmente nesta atualização
+const blocked = new Map()
 
 function fetchRange(sheetId, range, apiKey) {
   const key = `${sheetId}||${range}`
   const cached = cache.get(key)
   if (cached && Date.now() - cached.ts < CACHE_TTL) return Promise.resolve(cached.data)
   if (inflight.has(key)) return inflight.get(key)
+  if (blocked.has(key)) {
+    const err = blocked.get(key)
+    blocked.delete(key)
+    if (lastGood.has(key)) return Promise.resolve(lastGood.get(key))
+    return Promise.reject(err)
+  }
 
   // Only encode spaces — keep ' and ! literal (needed for Sheets range syntax)
   const url = `${BASE}/${sheetId}/values/${range.replace(/ /g, '%20')}?key=${apiKey}&valueRenderOption=FORMATTED_VALUE`
@@ -123,7 +131,14 @@ async function prefetchBatch(sheetId, ranges, apiKey) {
       ;(json.valueRanges || []).forEach((vr, i) => storeRange(`${sheetId}||${missing[i]}`, vr.values || []))
     })
   try { await p } catch (e) {
-    console.warn(`[SHEETS] batch falhou (${e.message}) — buscando abas uma a uma`, sheetId)
+    if (e instanceof NonRetryableError) {
+      // Ex: nome de aba errado derruba o lote inteiro — busca uma a uma pra isolar o erro
+      console.warn(`[SHEETS] batch falhou (${e.message}) — buscando abas uma a uma`, sheetId)
+    } else {
+      // Cota estourada/instabilidade: buscar uma a uma só gastaria mais cota
+      console.warn(`[SHEETS] batch falhou (${e.message}) — sem nova tentativa nesta atualização`, sheetId)
+      missing.forEach(r => blocked.set(`${sheetId}||${r}`, e))
+    }
   }
 }
 
