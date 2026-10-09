@@ -38,16 +38,22 @@ function runLoad(store, { offers, settings, apiKey, buyersApiKey }, invalidate) 
     const data     = {}
     const warnings = []
     if (buyersFailed) warnings.push('Planilha de compradores (faturamento/vendas)')
+    const bySource = {}
 
     for (const offer of offers) {
-      const failed = buyersFailed || failures[offer.id]
+      // Aba da oferta é só fallback histórico — falha nela não segura a atualização
+      const failed = buyersFailed || (failures[offer.id] || []).some(f => f !== 'aba da oferta')
       const prev   = store.data[offer.id]
       // Fonte falhou e já temos dado bom dessa oferta — mantém o anterior em vez de
       // mostrar gasto zerado ou vindo da aba de fallback
       data[offer.id] = failed && prev
         ? prev
         : (raw[offer.id] || []).map(r => enrichRow(r, settings.aliquota))
-      if (failures[offer.id]) warnings.push(`${offer.name} (${failures[offer.id].join(', ')})`)
+      ;(failures[offer.id] || []).forEach(src => (bySource[src] ||= []).push(offer.name))
+    }
+    // Agrupa por fonte: "Meta: Oferta A, Oferta B" — muitas ofertas viram contagem
+    for (const [src, names] of Object.entries(bySource)) {
+      warnings.push(`${src}: ${names.length > 4 ? `${names.length} ofertas` : names.join(', ')}`)
     }
 
     store.data        = data

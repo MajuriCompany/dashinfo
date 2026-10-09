@@ -25,35 +25,33 @@ const MAX_CONCURRENT = 4
 let active = 0
 const queue = []
 
+// Cota da API key: 60 leituras/min. Mantém margem — nunca passa de MAX_PER_MINUTE na janela de 60s.
+const MAX_PER_MINUTE = 50
+const sentAt = []
+
+async function waitForQuota() {
+  for (;;) {
+    const now = Date.now()
+    while (sentAt.length && now - sentAt[0] >= 60_000) sentAt.shift()
+    if (sentAt.length < MAX_PER_MINUTE) { sentAt.push(now); return }
+    await sleep(60_000 - (now - sentAt[0]) + 50)
+  }
+}
+
 async function withSlot(fn) {
   if (active >= MAX_CONCURRENT) await new Promise(resolve => queue.push(resolve))
   active++
-  try { return await fn() } finally {
+  try {
+    await waitForQuota()
+    return await fn()
+  } finally {
     active--
     queue.shift()?.()
   }
 }
 
-// Requisições em andamento — se duas partes do app pedem o mesmo range, compartilham a mesma busca.
-const inflight = new Map()
-
-function fetchRange(sheetId, range, apiKey, attempts = 4) {
-  const key = `${sheetId}||${range}`
-  const cached = cache.get(key)
-  if (cached && Date.now() - cached.ts < CACHE_TTL) return Promise.resolve(cached.data)
-  if (inflight.has(key)) return inflight.get(key)
-
-  const p = fetchRangeUncached(key, sheetId, range, apiKey, attempts)
-    .finally(() => inflight.delete(key))
-  inflight.set(key, p)
-  return p
-}
-
-async function fetchRangeUncached(key, sheetId, range, apiKey, attempts) {
-  // Only encode spaces — keep ' and ! literal (needed for Sheets range syntax)
-  const encodedRange = range.replace(/ /g, '%20')
-  const url = `${BASE}/${sheetId}/values/${encodedRange}?key=${apiKey}&valueRenderOption=FORMATTED_VALUE`
-
+// GET com retry/backoff. Cota estourada (429) zera por minuto — esperas maiores (2s, 4s, 8s, 16s).
+async function requestJson(url, label, attempts = 5) {
   for (let attempt = 1; attempt <= attempts; attempt++) {
     let status = 0
     try {
@@ -63,19 +61,69 @@ async function fetchRangeUncached(key, sheetId, range, apiKey, attempts) {
         const msg = `Sheets API ${res.status}: ${res.statusText}`
         throw RETRYABLE_STATUS.has(res.status) ? new Error(msg) : new NonRetryableError(msg)
       }
-      const json = await res.json()
-      const data = json.values || []
-      cache.set(key, { data, ts: Date.now() })
-      return data
+      return await res.json()
     } catch (e) {
       const isLastAttempt = attempt === attempts
       if (e instanceof NonRetryableError || isLastAttempt) throw e
-      // Backoff exponencial; cota estourada (429) precisa de espera maior pra liberar
       const base  = status === 429 ? 2000 : 800
       const delay = base * 2 ** (attempt - 1) + Math.random() * 500
-      console.warn(`[SHEETS] tentativa ${attempt} falhou (${e.message}), tentando de novo em ${Math.round(delay)}ms...`, sheetId, range)
+      console.warn(`[SHEETS] tentativa ${attempt} falhou (${e.message}), tentando de novo em ${Math.round(delay)}ms...`, label)
       await sleep(delay)
     }
+  }
+}
+
+// Requisições em andamento — se duas partes do app pedem o mesmo range, compartilham a mesma busca.
+const inflight = new Map()
+// Último valor bom de cada range (não expira) — usado se uma atualização falhar
+const lastGood = new Map()
+
+function fetchRange(sheetId, range, apiKey) {
+  const key = `${sheetId}||${range}`
+  const cached = cache.get(key)
+  if (cached && Date.now() - cached.ts < CACHE_TTL) return Promise.resolve(cached.data)
+  if (inflight.has(key)) return inflight.get(key)
+
+  // Only encode spaces — keep ' and ! literal (needed for Sheets range syntax)
+  const url = `${BASE}/${sheetId}/values/${range.replace(/ /g, '%20')}?key=${apiKey}&valueRenderOption=FORMATTED_VALUE`
+  const p = requestJson(url, `${sheetId} ${range}`)
+    .then(json => storeRange(key, json.values || []))
+    .catch(e => {
+      if (lastGood.has(key)) {
+        console.warn(`[SHEETS] usando último valor bom de ${range} (${e.message})`)
+        return lastGood.get(key)
+      }
+      throw e
+    })
+    .finally(() => inflight.delete(key))
+  inflight.set(key, p)
+  return p
+}
+
+function storeRange(key, data) {
+  cache.set(key, { data, ts: Date.now() })
+  lastGood.set(key, data)
+  return data
+}
+
+// Busca vários ranges da MESMA planilha numa única leitura (values:batchGet = 1 da cota).
+// Só pré-aquece o cache — se falhar (ex: um nome de aba errado), os fetchRange individuais
+// tentam cada range separado depois.
+async function prefetchBatch(sheetId, ranges, apiKey) {
+  const missing = [...new Set(ranges)].filter(r => {
+    const c = cache.get(`${sheetId}||${r}`)
+    return !(c && Date.now() - c.ts < CACHE_TTL)
+  })
+  if (missing.length < 2) return
+
+  const qs  = missing.map(r => `ranges=${encodeURIComponent(r)}`).join('&')
+  const url = `${BASE}/${sheetId}/values:batchGet?key=${apiKey}&valueRenderOption=FORMATTED_VALUE&${qs}`
+  const p   = requestJson(url, `${sheetId} batch(${missing.length})`)
+    .then(json => {
+      ;(json.valueRanges || []).forEach((vr, i) => storeRange(`${sheetId}||${missing[i]}`, vr.values || []))
+    })
+  try { await p } catch (e) {
+    console.warn(`[SHEETS] batch falhou (${e.message}) — buscando abas uma a uma`, sheetId)
   }
 }
 
@@ -388,7 +436,24 @@ export async function fetchOfferData(offer, apiKey, getRateForDate, buyersDataBy
 // ---------------------------------------------------------------------------
 // FETCH de todas as ofertas
 // ---------------------------------------------------------------------------
+function offerRanges(offer) {
+  const list = [
+    [offer.resultSheetId, `${offer.resultTab}!A:N`],
+    [offer.metaSheetId,   `${offer.metaTab}!A:Z`],
+  ]
+  if (offer.oldMetaSheetId) list.push([offer.oldMetaSheetId, `${offer.oldMetaTab || offer.metaTab}!A:Z`])
+  return list.filter(([id]) => id)
+}
+
 export async function fetchAllOffersData(offers, apiKey, getRateForDate, buyersApiKey = '') {
+  // Agrupa por planilha e busca em lote — as abas de resultado de todas as ofertas
+  // ficam na mesma planilha: vira 1 leitura em vez de 1 por oferta.
+  const bySheet = {}
+  offers.forEach(o => offerRanges(o).forEach(([id, range]) => {
+    (bySheet[id] ||= []).push(range)
+  }))
+  await Promise.all(Object.entries(bySheet).map(([id, ranges]) => prefetchBatch(id, ranges, apiKey)))
+
   let buyersDataByOffer = {}
   let productRows = {}
   let buyersFailed = false
