@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList, Cell } from 'recharts'
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { PieChart as PieIcon } from 'lucide-react'
 import { useAppConfig } from '../hooks/useAppConfig'
-import { TIPO_OPTIONS, RESULTADO_OPTIONS } from '../config/offerClassification'
+import { TIPO_OPTIONS, RESULTADO_OPTIONS, optionLabel } from '../config/offerClassification'
 
 function pct(n, total) {
   return total > 0 ? (n / total) * 100 : 0
@@ -18,31 +18,31 @@ function distribution(offers, field, options) {
 }
 
 function DistributionChart({ data }) {
+  const slices = data.filter(d => d.count > 0)
   return (
-    <ResponsiveContainer width="100%" height={220}>
-      <BarChart data={data} margin={{ top: 22, right: 8, left: -20, bottom: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
-        <XAxis dataKey="name" tick={{ fontSize: 10 }} interval={0} />
-        <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
-        <Tooltip formatter={(v, _n, item) => [`${v} (${item.payload.pct.toFixed(0)}%)`, 'Ofertas']} />
-        <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-          {data.map(d => <Cell key={d.name} fill={d.color} />)}
-          <LabelList
-            dataKey="count"
-            position="top"
-            content={({ x, y, width, index }) => {
-              const d = data[index]
-              if (!d.count) return null
-              return (
-                <text x={x + width / 2} y={y - 6} textAnchor="middle" fontSize={10} fontWeight={600} fill="#374151">
-                  {d.count} · {d.pct.toFixed(0)}%
-                </text>
-              )
-            }}
-          />
-        </Bar>
-      </BarChart>
-    </ResponsiveContainer>
+    <div className="flex flex-col sm:flex-row items-center gap-4">
+      <div className="w-full sm:w-1/2 h-[220px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie data={slices} dataKey="count" nameKey="name" innerRadius="45%" outerRadius="85%" paddingAngle={2} stroke="none">
+              {slices.map(d => <Cell key={d.name} fill={d.color} />)}
+            </Pie>
+            <Tooltip formatter={(v, _n, item) => [`${v} (${item.payload.pct.toFixed(0)}%)`, item.payload.name]} />
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
+      {/* Legenda com quantidade e % */}
+      <ul className="w-full sm:w-1/2 space-y-1.5">
+        {data.map(d => (
+          <li key={d.name} className={`flex items-center gap-2 text-xs ${d.count ? 'text-gray-700' : 'text-gray-300'}`}>
+            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: d.color }} />
+            <span className="flex-1 truncate">{d.name}</span>
+            <span className="tabular-nums text-gray-400">{d.count}</span>
+            <span className="tabular-nums font-semibold w-10 text-right">{d.pct.toFixed(0)}%</span>
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }
 
@@ -61,6 +61,12 @@ export default function OfferClassificationDash() {
   )
   const byResultado = useMemo(() => distribution(offersInTipo, 'resultado', RESULTADO_OPTIONS), [offersInTipo])
   const resultadoTotal = byResultado.reduce((s, d) => s + d.count, 0)
+
+  const RES_ORDER = ['muito_bom', 'bom', 'medio', 'ruim']
+  const offerList = useMemo(() => {
+    const rank = o => { const i = RES_ORDER.indexOf(o.resultado); return i < 0 ? 99 : i }
+    return [...offersInTipo].sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name))
+  }, [offersInTipo])
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
@@ -115,6 +121,45 @@ export default function OfferClassificationDash() {
             </div>
           ) : (
             <DistributionChart data={byResultado} />
+          )}
+
+          {/* Quais ofertas estão no filtro */}
+          {offerList.length > 0 && (
+            <div className="mt-4 border border-gray-100 rounded-lg overflow-hidden">
+              <table className="w-full text-xs">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="text-left px-3 py-2 text-gray-500 font-semibold">Oferta</th>
+                    {tipoFilter === 'all' && <th className="text-left px-3 py-2 text-gray-500 font-semibold">Tipo</th>}
+                    <th className="text-left px-3 py-2 text-gray-500 font-semibold">Resultado</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {offerList.map(o => {
+                    const res = RESULTADO_OPTIONS.find(r => r.value === o.resultado)
+                    return (
+                      <tr key={o.id}>
+                        <td className="px-3 py-1.5 text-gray-700">
+                          <span className="inline-block w-2 h-2 rounded-full mr-2 align-middle" style={{ backgroundColor: o.color }} />
+                          {o.name}
+                        </td>
+                        {tipoFilter === 'all' && (
+                          <td className="px-3 py-1.5 text-gray-500">{optionLabel(TIPO_OPTIONS, o.tipo) || <span className="text-gray-300">—</span>}</td>
+                        )}
+                        <td className="px-3 py-1.5">
+                          {res ? (
+                            <span className="inline-flex items-center gap-1.5 font-medium" style={{ color: res.color }}>
+                              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: res.color }} />
+                              {res.label}
+                            </span>
+                          ) : <span className="text-gray-300">sem resultado</span>}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       </div>
