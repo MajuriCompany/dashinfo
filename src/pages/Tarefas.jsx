@@ -1,7 +1,8 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react'
-import { ChevronLeft, ChevronRight, X, ClipboardList, Plus, Pencil, Trash2, Check, Settings2, GripVertical } from 'lucide-react'
+import { ChevronLeft, ChevronRight, X, ClipboardList, Plus, Pencil, Trash2, Check, Settings2 } from 'lucide-react'
 import { getISOWeek, getISOWeekYear, startOfISOWeek, addWeeks, addDays, format } from 'date-fns'
 import { useTaskData } from '../hooks/useTaskData'
+import OfferClassificationDash from '../components/OfferClassificationDash'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -359,7 +360,7 @@ function SummaryLabelEditor({ labels, onUpdate, onAdd, onRemove }) {
   )
 }
 
-function MonthlySummary({ summaries, updateSummary, summaryLabels, updateSummaryLabel, addSummaryLabel, removeSummaryLabel, offersTable, addOffer, updateOffer, removeOffer, reorderOffers, currentWeekKey, todayStr }) {
+function MonthlySummary({ summaries, updateSummary, summaryLabels, updateSummaryLabel, addSummaryLabel, removeSummaryLabel, currentWeekKey, todayStr }) {
   const today = useMemo(() => new Date(), [])
   const [monthOffset,  setMonthOffset]  = useState(0)
   const [openDropdown, setOpenDropdown] = useState(null) // null | { weekKey, top, left }
@@ -368,8 +369,6 @@ function MonthlySummary({ summaries, updateSummary, summaryLabels, updateSummary
   const currentMonth = useMemo(() => new Date(today.getFullYear(), today.getMonth() + monthOffset, 1), [today, monthOffset])
   const weeks        = useMemo(() => weeksForMonth(currentMonth.getFullYear(), currentMonth.getMonth()), [currentMonth])
   const monthLabel   = `${MONTHS_PT[currentMonth.getMonth()]} ${currentMonth.getFullYear()}`
-  const monthKey     = format(currentMonth, 'yyyy-MM')
-  const offers       = useMemo(() => Array.isArray(offersTable[monthKey]) ? offersTable[monthKey] : [], [offersTable, monthKey])
 
   function toggleTag(weekKey, tagId) {
     const curr = summaries[weekKey]?.tags
@@ -522,16 +521,6 @@ function MonthlySummary({ summaries, updateSummary, summaryLabels, updateSummary
         })}
       </div>
 
-      {/* Offers table */}
-      <OffersTable
-        monthKey={monthKey}
-        offers={offers}
-        onAdd={addOffer}
-        onUpdate={updateOffer}
-        onRemove={removeOffer}
-        onReorder={reorderOffers}
-      />
-
       {/* Label editor */}
       {showEditor && (
         <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/60">
@@ -547,196 +536,6 @@ function MonthlySummary({ summaries, updateSummary, summaryLabels, updateSummary
   )
 }
 
-// ── Offers table ─────────────────────────────────────────────────────────────
-
-const RESULTADO_OPTIONS = [
-  { value: 'excelente', label: 'Excelente', classes: 'text-emerald-700 bg-emerald-100 border-emerald-200' },
-  { value: 'bom',       label: 'Bom',       classes: 'text-blue-700 bg-blue-100 border-blue-200' },
-  { value: 'medio',     label: 'Médio',     classes: 'text-amber-700 bg-amber-100 border-amber-200' },
-  { value: 'ruim',      label: 'Ruim',      classes: 'text-red-700 bg-red-100 border-red-200' },
-]
-
-const REALIZADO_OPTIONS = [
-  { value: 'modelado', label: 'Modelado do 0',    classes: 'text-purple-700 bg-purple-100 border-purple-200' },
-  { value: 'ajuste',   label: 'Ajuste de Oferta', classes: 'text-orange-700 bg-orange-100 border-orange-200' },
-  { value: 'meio',     label: 'Meio Modelado',    classes: 'text-sky-700 bg-sky-100 border-sky-200' },
-]
-
-function BadgeSelect({ value, options, onChange }) {
-  const opt = options.find(o => o.value === value)
-  return (
-    <select
-      value={value || ''}
-      onChange={e => onChange(e.target.value)}
-      className={`text-[11px] font-semibold px-2.5 py-1 rounded-full cursor-pointer outline-none border transition-colors ${
-        opt ? opt.classes : 'text-gray-400 bg-gray-100 border-gray-200'
-      }`}
-    >
-      <option value="">—</option>
-      {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-    </select>
-  )
-}
-
-function InlineText({ value, placeholder, onSave, className = '' }) {
-  const [editing, setEditing] = useState(false)
-  const [val, setVal] = useState(value)
-  if (!editing) return (
-    <span
-      onClick={() => { setVal(value); setEditing(true) }}
-      className={`cursor-pointer hover:text-blue-600 block min-h-[22px] ${className}`}
-    >
-      {value || <span className="text-gray-300 text-xs italic">{placeholder}</span>}
-    </span>
-  )
-  return (
-    <input
-      autoFocus
-      className="w-full text-sm border border-blue-300 rounded-md px-2 py-0.5 outline-none focus:ring-1 focus:ring-blue-400 bg-white"
-      value={val}
-      onChange={e => setVal(e.target.value)}
-      onBlur={() => { setEditing(false); onSave(val) }}
-      onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') e.currentTarget.blur() }}
-    />
-  )
-}
-
-function OfferRow({ row, onUpdate, onRemove, onDragStart, onDragOver, onDrop, onDragEnd, isDragOver }) {
-  return (
-    <tr
-      draggable
-      onDragStart={onDragStart}
-      onDragOver={e => { e.preventDefault(); onDragOver() }}
-      onDrop={onDrop}
-      onDragEnd={onDragEnd}
-      className={`group transition-colors ${
-        isDragOver
-          ? 'bg-blue-50/70 shadow-[inset_0_2px_0_0_#3b82f6]'
-          : 'hover:bg-gray-50/60'
-      }`}
-    >
-      {/* Drag handle */}
-      <td className="py-2.5 pl-4 w-7 align-middle">
-        <GripVertical className="w-3.5 h-3.5 text-gray-300 group-hover:text-gray-400 cursor-grab active:cursor-grabbing select-none" />
-      </td>
-
-      {/* Data */}
-      <td className="py-2.5 px-2 align-middle w-[130px]">
-        <input
-          type="date"
-          value={row.data || ''}
-          onChange={e => onUpdate({ data: e.target.value })}
-          className="text-xs text-gray-600 border border-gray-200 rounded-md px-2 py-1 w-full cursor-pointer outline-none focus:ring-1 focus:ring-blue-300 focus:border-blue-300 bg-white hover:border-gray-300 transition-colors"
-        />
-      </td>
-
-      {/* Oferta */}
-      <td className="py-2.5 px-2 align-middle">
-        <InlineText
-          value={row.oferta}
-          placeholder="clique para editar"
-          onSave={v => onUpdate({ oferta: v })}
-          className="text-sm text-gray-700 font-medium"
-        />
-      </td>
-
-      {/* Realizado */}
-      <td className="py-2.5 px-2 align-middle whitespace-nowrap">
-        <BadgeSelect value={row.realizado} options={REALIZADO_OPTIONS} onChange={v => onUpdate({ realizado: v })} />
-      </td>
-
-      {/* Resultado */}
-      <td className="py-2.5 px-2 align-middle whitespace-nowrap">
-        <BadgeSelect value={row.resultado} options={RESULTADO_OPTIONS} onChange={v => onUpdate({ resultado: v })} />
-      </td>
-
-      {/* Observações */}
-      <td className="py-2.5 px-2 align-middle">
-        <InlineText
-          value={row.obs}
-          placeholder="adicionar..."
-          onSave={v => onUpdate({ obs: v })}
-          className="text-sm text-gray-500"
-        />
-      </td>
-
-      {/* Delete */}
-      <td className="py-2.5 pr-4 w-8 align-middle">
-        <button
-          onClick={onRemove}
-          className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-400 transition-all p-1 rounded-md hover:bg-red-50"
-        >
-          <Trash2 className="w-3.5 h-3.5" />
-        </button>
-      </td>
-    </tr>
-  )
-}
-
-function OffersTable({ monthKey, offers, onAdd, onUpdate, onRemove, onReorder }) {
-  const [dragId,   setDragId]   = useState(null)
-  const [dragOver, setDragOver] = useState(null)
-
-  return (
-    <div className="border-t border-gray-100">
-      <div className="flex items-center justify-between px-6 py-3.5">
-        <div>
-          <h3 className="text-sm font-semibold text-gray-700">Ofertas do mês</h3>
-          <p className="text-[11px] text-gray-400 mt-0.5">Arraste para reordenar</p>
-        </div>
-        <button
-          onClick={() => onAdd(monthKey)}
-          className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700 font-semibold px-3 py-1.5 rounded-lg hover:bg-blue-50 border border-blue-200 hover:border-blue-300 transition-colors"
-        >
-          <Plus className="w-3.5 h-3.5" /> Adicionar oferta
-        </button>
-      </div>
-
-      <div className="overflow-x-auto pb-4">
-        <table className="w-full border-collapse">
-          <thead>
-            <tr className="bg-gray-50/80 border-y border-gray-100">
-              <th className="w-7 pl-4" />
-              <th className="py-2.5 px-2 text-left text-[10px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Data</th>
-              <th className="py-2.5 px-2 text-left text-[10px] font-bold text-gray-400 uppercase tracking-wider">Oferta feita</th>
-              <th className="py-2.5 px-2 text-left text-[10px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Realizado</th>
-              <th className="py-2.5 px-2 text-left text-[10px] font-bold text-gray-400 uppercase tracking-wider">Resultado</th>
-              <th className="py-2.5 px-2 text-left text-[10px] font-bold text-gray-400 uppercase tracking-wider">Observações</th>
-              <th className="w-8 pr-4" />
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-50">
-            {offers.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="py-8 text-center text-xs text-gray-300 italic">
-                  Nenhuma oferta registrada — clique em Adicionar para começar
-                </td>
-              </tr>
-            ) : (
-              offers.map(row => (
-                <OfferRow
-                  key={row.id}
-                  row={row}
-                  isDragOver={dragOver === row.id && dragId !== row.id}
-                  onUpdate={fields => onUpdate(monthKey, row.id, fields)}
-                  onRemove={() => onRemove(monthKey, row.id)}
-                  onDragStart={() => setDragId(row.id)}
-                  onDragOver={() => setDragOver(row.id)}
-                  onDrop={() => {
-                    if (dragId && dragId !== row.id) onReorder(monthKey, dragId, row.id)
-                    setDragId(null); setDragOver(null)
-                  }}
-                  onDragEnd={() => { setDragId(null); setDragOver(null) }}
-                />
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  )
-}
-
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function Tarefas() {
@@ -745,7 +544,6 @@ export default function Tarefas() {
     summaries, updateSummary,
     taskTypes, updateTaskType, addTaskType, removeTaskType,
     summaryLabels, updateSummaryLabel, addSummaryLabel, removeSummaryLabel,
-    offersTable, addOffer, updateOffer, removeOffer, reorderOffers,
   } = useTaskData()
 
   const [weekOffset,        setWeekOffset]        = useState(0)
@@ -958,14 +756,12 @@ export default function Tarefas() {
         updateSummaryLabel={updateSummaryLabel}
         addSummaryLabel={addSummaryLabel}
         removeSummaryLabel={removeSummaryLabel}
-        offersTable={offersTable}
-        addOffer={addOffer}
-        updateOffer={updateOffer}
-        removeOffer={removeOffer}
-        reorderOffers={reorderOffers}
         currentWeekKey={currentWeekKey}
         todayStr={todayStr}
       />
+
+      {/* Agregado de ofertas (tipo / resultado vindos de Configurações) */}
+      <OfferClassificationDash />
 
       {modal && (
         <TaskModal

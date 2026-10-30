@@ -5,6 +5,7 @@ import { useMonthlyGoals } from '../hooks/useMonthlyGoals'
 import { getMesAtualKey } from '../utils/dateUtils'
 import { fetchAllBuyersProducts } from '../services/sheetsService'
 import DiagnosticPanel from '../components/DiagnosticPanel'
+import { TIPO_OPTIONS, RESULTADO_OPTIONS, optionLabel } from '../config/offerClassification'
 
 const EMPTY_OFFER = {
   id: '', name: '', status: 'active', color: '#2563eb',
@@ -12,6 +13,7 @@ const EMPTY_OFFER = {
   oldMetaSheetId: '', oldMetaTab: '', oldMetaUntil: '',
   metaCurrency: 'USD', metaCampaignFilter: '',
   startDate: '',
+  tipo: '', resultado: '',
   frontProduct: '', otherProducts: [],
 }
 
@@ -495,6 +497,28 @@ export default function Settings() {
                   <option value="paused">Pausada</option>
                 </select>
               </div>
+              <div>
+                <label className="text-gray-500 block mb-0.5">Tipo da oferta</label>
+                <select
+                  className="border rounded px-2 py-1 w-full text-xs"
+                  value={form.tipo || ''}
+                  onChange={e => setForm(p => ({ ...p, tipo: e.target.value }))}
+                >
+                  <option value="">—</option>
+                  {TIPO_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-gray-500 block mb-0.5">Resultado</label>
+                <select
+                  className="border rounded px-2 py-1 w-full text-xs"
+                  value={form.resultado || ''}
+                  onChange={e => setForm(p => ({ ...p, resultado: e.target.value }))}
+                >
+                  <option value="">—</option>
+                  {RESULTADO_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </div>
             </div>
             <div className="flex gap-2">
               <button onClick={submitForm} className="px-3 py-1 bg-blue-600 text-white rounded text-xs">Salvar</button>
@@ -522,6 +546,16 @@ export default function Settings() {
               }`}>
                 {offer.status === 'active' ? 'Ativa' : offer.status === 'testing' ? 'Em teste' : 'Pausada'}
               </span>
+              {offer.tipo && (
+                <span className="text-xs px-1.5 py-0.5 rounded shrink-0 bg-purple-50 text-purple-600">
+                  {optionLabel(TIPO_OPTIONS, offer.tipo)}
+                </span>
+              )}
+              {offer.resultado && (
+                <span className="text-xs px-1.5 py-0.5 rounded shrink-0 bg-blue-50 text-blue-600">
+                  {optionLabel(RESULTADO_OPTIONS, offer.resultado)}
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <button onClick={() => openEditForm(offer)} className="p-1 text-gray-400 hover:text-gray-700">
