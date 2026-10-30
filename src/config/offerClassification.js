@@ -2,6 +2,7 @@
 
 export const TIPO_OPTIONS = [
   { value: 'modelado',       label: 'Modelado',              color: '#7c3aed' },
+  { value: 'modelado_ruim',  label: 'Modelado - oferta ruim', color: '#c084fc' },
   { value: 'outras_linguas', label: 'Outras línguas',        color: '#0891b2' },
   { value: 'nao_valeu',      label: 'Não valeu',             color: '#9ca3af' },
   { value: 'escrito_100',    label: '100% escrito',          color: '#2563eb' },
