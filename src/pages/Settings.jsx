@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Plus, Edit2, Trash2, PauseCircle, PlayCircle, AlertTriangle, Save, RefreshCw, Upload, Download } from 'lucide-react'
+import { Plus, Edit2, Trash2, PauseCircle, PlayCircle, AlertTriangle, Save, RefreshCw, Upload, Download, Lock, Unlock, Check, X } from 'lucide-react'
 import { useAppConfig } from '../hooks/useAppConfig'
 import { useMonthlyGoals } from '../hooks/useMonthlyGoals'
 import { getMesAtualKey } from '../utils/dateUtils'
@@ -34,6 +34,7 @@ export default function Settings() {
   const [unmapped,         setUnmapped]         = useState([])
   const [buyersProducts,   setBuyersProducts]   = useState([])
   const [loadingBuyers,    setLoadingBuyers]    = useState(false)
+  const [locking,          setLocking]          = useState(null) // { id, date } — trava em edição
 
   const { goals, setGoals, removeGoals } = useMonthlyGoals()
   const [goalMonth,  setGoalMonth]  = useState(getMesAtualKey)
@@ -556,8 +557,55 @@ export default function Settings() {
                   {optionLabel(RESULTADO_OPTIONS, offer.resultado)}
                 </span>
               )}
+              {offer.lockedUntil && (
+                <span
+                  className="text-xs px-1.5 py-0.5 rounded shrink-0 bg-gray-800 text-white flex items-center gap-1"
+                  title="Vendas dos produtos dessa oferta depois dessa data vão para outra oferta com o mesmo produto"
+                >
+                  <Lock className="w-3 h-3" />
+                  Travada até {new Date(offer.lockedUntil + 'T12:00:00').toLocaleDateString('pt-BR')}
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-2 shrink-0">
+              {locking?.id === offer.id ? (
+                <div className="flex items-center gap-1">
+                  <span className="text-xs text-gray-500">Travar até</span>
+                  <input
+                    type="date"
+                    className="border rounded px-1.5 py-0.5 text-xs"
+                    value={locking.date}
+                    onChange={e => setLocking(l => ({ ...l, date: e.target.value }))}
+                  />
+                  <button
+                    onClick={() => { updateOffer(offer.id, { lockedUntil: locking.date }); setLocking(null) }}
+                    disabled={!locking.date}
+                    className="p-1 text-green-600 hover:text-green-700 disabled:opacity-40"
+                    title="Confirmar trava"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                  </button>
+                  <button onClick={() => setLocking(null)} className="p-1 text-gray-400 hover:text-gray-700" title="Cancelar">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ) : offer.lockedUntil ? (
+                <button
+                  onClick={() => { if (confirm(`Destravar "${offer.name}"? Ela volta a receber todas as vendas dos seus produtos.`)) updateOffer(offer.id, { lockedUntil: '' }) }}
+                  className="p-1 text-gray-700 hover:text-amber-600"
+                  title="Destravar resultado"
+                >
+                  <Unlock className="w-3.5 h-3.5" />
+                </button>
+              ) : (
+                <button
+                  onClick={() => setLocking({ id: offer.id, date: new Date().toISOString().slice(0, 10) })}
+                  className="p-1 text-gray-400 hover:text-gray-700"
+                  title="Travar resultado (produtos reaproveitados em outra oferta)"
+                >
+                  <Lock className="w-3.5 h-3.5" />
+                </button>
+              )}
               <button onClick={() => openEditForm(offer)} className="p-1 text-gray-400 hover:text-gray-700">
                 <Edit2 className="w-3.5 h-3.5" />
               </button>

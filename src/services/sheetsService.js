@@ -168,6 +168,19 @@ export function parseOfferResultRows(rawRows) {
 // ---------------------------------------------------------------------------
 const BUYERS_CUTOFF = new Date(2026, 2, 31) // 31/03/2026 horário local
 
+// Oferta travada (lockedUntil) só recebe vendas até a data da trava, inclusive.
+// Depois disso a venda vai pra uma oferta não travada com o mesmo produto.
+// Várias travas em sequência: vai pra que trava primeiro (a mais antiga que ainda cobre a data).
+function resolveOffer(candidates, dateKey) {
+  if (!candidates?.length) return null
+  const locked = candidates
+    .filter(c => c.lockedUntil && dateKey <= c.lockedUntil)
+    .sort((a, b) => a.lockedUntil.localeCompare(b.lockedUntil))
+  if (locked.length) return locked[0]
+  const open = candidates.filter(c => !c.lockedUntil)
+  return open[open.length - 1] || null  // mesma regra de antes: a última cadastrada vence
+}
+
 export async function fetchBuyersDataByOffer(buyersApiKey, offers) {
   const rows = await fetchRange(RESULTADO_GERAL_ID, "'todos compradores'!A:Z", buyersApiKey)
   if (!rows || rows.length < 2) {
@@ -184,17 +197,23 @@ export async function fetchBuyersDataByOffer(buyersApiKey, offers) {
   const iComissao = 5  // Valor comissão
   const iVal      = 6  // Valor Bruto Total
 
-  // Mapa: nome_produto_normalizado → { offerId, isFront }
+  // Mapa: nome_produto_normalizado → [{ offerId, isFront, lockedUntil }]
+  // Um produto pode estar em mais de uma oferta (reaproveitado) — resolveOffer decide por data
   const productMap = {}
+  const addProduct = (name, entry) => {
+    const k = name.trim().toLowerCase()
+    ;(productMap[k] ||= []).push(entry)
+  }
   offers.forEach(offer => {
     const frontProducts = Array.isArray(offer.frontProduct)
       ? offer.frontProduct
       : (offer.frontProduct ? offer.frontProduct.split(',').map(s => s.trim()).filter(Boolean) : [])
+    const lockedUntil = offer.lockedUntil || null
     frontProducts.forEach(p => {
-      if (p) productMap[p.trim().toLowerCase()] = { offerId: offer.id, isFront: true }
+      if (p) addProduct(p, { offerId: offer.id, isFront: true, lockedUntil })
     })
     ;(offer.otherProducts || []).forEach(p => {
-      if (p) productMap[p.trim().toLowerCase()] = { offerId: offer.id, isFront: false }
+      if (p) addProduct(p, { offerId: offer.id, isFront: false, lockedUntil })
     })
   })
   console.log('[COMPRADORES] produtos mapeados:', Object.keys(productMap))
@@ -213,11 +232,11 @@ export async function fetchBuyersDataByOffer(buyersApiKey, offers) {
     if (date < BUYERS_CUTOFF) continue
 
     const prodName = String(row[iProd] || '').trim()
-    const match    = productMap[prodName.toLowerCase()]
+    const dateKey  = date.toISOString().split('T')[0]
+    const match    = resolveOffer(productMap[prodName.toLowerCase()], dateKey)
     if (!match) { notFound.add(prodName); continue }
 
     const { offerId, isFront } = match
-    const dateKey       = date.toISOString().split('T')[0]
     const valor         = parseNum(String(row[iVal]      || '0'))
     const comissaoValor = parseNum(String(row[iComissao] || '0'))
 
