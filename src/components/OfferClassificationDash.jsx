@@ -8,6 +8,38 @@ function pct(n, total) {
   return total > 0 ? (n / total) * 100 : 0
 }
 
+// ── Filtro por data de criação da oferta ──────────────────────────────────────
+
+const PERIODS = [
+  { key: 'd30',   label: 'Últ. 30d',  days: 30 },
+  { key: 'd90',   label: 'Últ. 90d',  days: 90 },
+  { key: 'd180',  label: 'Últ. 180d', days: 180 },
+  { key: 'total', label: 'Período total' },
+]
+
+function periodStart(key) {
+  const p = PERIODS.find(x => x.key === key)
+  if (!p?.days) return null
+  const start = new Date()
+  start.setHours(0, 0, 0, 0)
+  start.setDate(start.getDate() - (p.days - 1))
+  return start
+}
+
+// Data de criação usada só neste filtro, quando difere da data de início (nome em minúsculas → YYYY-MM-DD)
+const CREATED_OVERRIDE = {
+  'libido oculta': '2026-03-31',
+}
+
+// Data de início (Configurações) → senão data de cadastro no dash
+function offerCreatedAt(o) {
+  const override = CREATED_OVERRIDE[(o.name || '').trim().toLowerCase()]
+  if (override) return new Date(override + 'T12:00:00')
+  if (o.startDate) return new Date(o.startDate + 'T12:00:00')
+  if (o.createdAt) return new Date(o.createdAt)
+  return null
+}
+
 // Conta quantas ofertas caem em cada opção; % sobre as que têm a opção preenchida
 function distribution(offers, field, options) {
   const filled = offers.filter(o => options.some(opt => opt.value === o[field]))
@@ -47,8 +79,21 @@ function DistributionChart({ data }) {
 }
 
 export default function OfferClassificationDash() {
-  const { offers } = useAppConfig()
+  const { offers: allOffers } = useAppConfig()
   const [tipoFilter, setTipoFilter] = useState('all')
+  const [period, setPeriod] = useState('total')
+
+  const start = useMemo(() => periodStart(period), [period])
+  const semData = useMemo(() => allOffers.filter(o => !offerCreatedAt(o)).length, [allOffers])
+
+  // Só as ofertas criadas no período (sem data ficam fora dos filtros de dias)
+  const offers = useMemo(() => {
+    if (!start) return allOffers
+    return allOffers.filter(o => {
+      const d = offerCreatedAt(o)
+      return d ? d >= start : false
+    })
+  }, [allOffers, start])
 
   const semTipo      = offers.filter(o => !o.tipo).length
   const semResultado = offers.filter(o => !o.resultado).length
@@ -70,20 +115,39 @@ export default function OfferClassificationDash() {
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+      <div className="flex items-start justify-between gap-4 px-6 py-4 border-b border-gray-100 flex-wrap">
         <div>
           <h2 className="font-semibold text-gray-800 flex items-center gap-2">
             <PieIcon className="w-4 h-4 text-gray-500" />
             Agregado de ofertas
           </h2>
           <p className="text-xs text-gray-400 mt-0.5">
-            {offers.length} ofertas cadastradas · classifique em Configurações → editar oferta
+            {start
+              ? `${offers.length} de ${allOffers.length} ofertas criadas no período`
+              : `${allOffers.length} ofertas cadastradas`}
+            {' '}· classifique em Configurações → editar oferta
           </p>
+          <div className="flex flex-wrap items-center gap-1.5 mt-3">
+            {PERIODS.map(p => (
+              <button
+                key={p.key}
+                onClick={() => setPeriod(p.key)}
+                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                  period === p.key ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
         </div>
-        {(semTipo > 0 || semResultado > 0) && (
-          <p className="text-[11px] text-amber-600 text-right">
+        {(semTipo > 0 || semResultado > 0 || (start && semData > 0)) && (
+          <p className="text-[11px] text-amber-600 text-right max-w-[220px]">
             {semTipo > 0 && <span className="block">{semTipo} sem tipo</span>}
             {semResultado > 0 && <span className="block">{semResultado} sem resultado</span>}
+            {start && semData > 0 && (
+              <span className="block">{semData} sem data de início (fora do filtro) · defina em Configurações</span>
+            )}
           </p>
         )}
       </div>
