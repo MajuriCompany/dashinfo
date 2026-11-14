@@ -195,12 +195,37 @@ export default function OfferTimeline() {
   )
 }
 
+// Como cada tipo aparece no resumo do mês (singular / plural)
+const TIPO_RESUMO = {
+  modelado:       ['modelada', 'modeladas'],
+  modelado_ruim:  ['modelada - oferta ruim', 'modeladas - oferta ruim'],
+  outras_linguas: ['em outra língua', 'em outras línguas'],
+  nao_valeu:      ['não valeu', 'não valeram'],
+  escrito_100:    ['100% escrita', '100% escritas'],
+  escrito_medio:  ['escrita mais ou menos', 'escritas mais ou menos'],
+}
+const RES_ORDEM = ['muito_bom', 'bom', 'medio', 'ruim']
+
+// "3 modeladas (1 deu muito bom, 2 deu ruim)" — uma linha por tipo, na ordem de TIPO_OPTIONS
+function monthSummary(items) {
+  const tipos = [...TIPO_OPTIONS, { value: '', label: 'sem tipo', color: '#9ca3af' }]
+  return tipos
+    .map(t => {
+      const its = items.filter(it => (it.o.tipo || '') === t.value)
+      if (!its.length) return null
+      const [sing, plur] = TIPO_RESUMO[t.value] || ['sem tipo', 'sem tipo']
+      const res = RES_ORDEM
+        .map(v => ({ r: RESULTADO_OPTIONS.find(x => x.value === v), n: its.filter(it => it.o.resultado === v).length }))
+        .filter(x => x.n > 0)
+      const semRes = its.filter(it => !RES_ORDEM.includes(it.o.resultado)).length
+      return { t, n: its.length, label: its.length === 1 ? sing : plur, res, semRes }
+    })
+    .filter(Boolean)
+}
+
 function MonthCard({ title, subtitle, items, muted = false }) {
   const empty = items.length === 0
-  // Resumo por tipo no mês
-  const counts = TIPO_OPTIONS
-    .map(t => ({ ...t, n: items.filter(it => it.o.tipo === t.value).length }))
-    .filter(t => t.n > 0)
+  const summary = monthSummary(items)
 
   return (
     <div className={`rounded-lg border flex flex-col ${empty ? 'border-dashed border-gray-200 bg-gray-50/50' : 'border-gray-200 bg-white'}`}>
@@ -213,13 +238,28 @@ function MonthCard({ title, subtitle, items, muted = false }) {
             {items.length}
           </span>
         </div>
-        {/* Barrinha com a proporção dos tipos no mês */}
-        {counts.length > 0 && (
-          <div className="flex h-1.5 rounded-full overflow-hidden mt-1.5" title={counts.map(t => `${t.n} ${t.label}`).join(' · ')}>
-            {counts.map(t => (
-              <span key={t.value} style={{ backgroundColor: t.color, flexGrow: t.n }} />
+        {/* Resumo: quantas de cada tipo e como foram */}
+        {summary.length > 0 && (
+          <ul className="mt-1.5 space-y-0.5">
+            {summary.map(s => (
+              <li key={s.t.value} className="text-xs leading-snug text-gray-600">
+                <span className="font-semibold" style={{ color: s.t.color }}>{s.n} {s.label}</span>
+                {(s.res.length > 0 || s.semRes > 0) && (
+                  <span className="text-gray-400">
+                    {' ('}
+                    {s.res.map((x, i) => (
+                      <span key={x.r.value}>
+                        {i > 0 && ', '}
+                        <span className="font-medium" style={{ color: x.r.color }}>{x.n} {x.r.label.toLowerCase()}</span>
+                      </span>
+                    ))}
+                    {s.semRes > 0 && `${s.res.length ? ', ' : ''}${s.semRes} sem resultado`}
+                    {')'}
+                  </span>
+                )}
+              </li>
             ))}
-          </div>
+          </ul>
         )}
       </div>
 
