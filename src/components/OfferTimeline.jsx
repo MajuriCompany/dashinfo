@@ -5,9 +5,6 @@ import { useManualEntries } from '../hooks/useManualEntries'
 import { parseMetaRows } from '../services/sheetsService'
 import { TIPO_OPTIONS, RESULTADO_OPTIONS } from '../config/offerClassification'
 
-// Dia em que o dash começou: o que for antes disso vai pro grupo "Antes do dash"
-const DASH_START = '2026-03-31'
-
 // Ofertas que já rodavam quando o dash começou — data confirmada (1º gasto na planilha geral)
 const CONFIRMED_START = {
   'correntes (las 7 llaves)': '2025-09-26',
@@ -120,35 +117,36 @@ export default function OfferTimeline() {
 
       if (firstManual[norm(o.name)]) return { o, date: firstManual[norm(o.name)], source: '1ª entrada manual', sure: true }
 
-      if (o.startDate) return { o, date: o.startDate, source: 'data de início (sem gasto na Meta)', sure: false }
-      if (o.createdAt) return { o, date: ymd(new Date(o.createdAt)), source: 'data de cadastro (sem gasto na Meta)', sure: false }
+      if (o.startDate) return { o, date: o.startDate, source: 'data de início (sem gasto na Meta)', sure: true }
+      if (o.createdAt) return { o, date: ymd(new Date(o.createdAt)), source: 'data de cadastro (sem gasto na Meta)', sure: true }
       return { o, date: null, source: 'sem data', sure: false }
     })
   }, [offers, firstSpend, manualEntries])
 
-  // Agrupa: antes do dash / mês a mês desde o dash (mais recente em cima) / sem data
-  const { before, months, noDate, uncertain } = useMemo(() => {
-    const before = [], noDate = [], byMonth = {}
+  // Agrupa mês a mês, da 1ª oferta até hoje (mais recente em cima); sem nenhuma data vai pro fim
+  const { months, noDate } = useMemo(() => {
+    const noDate = [], byMonth = {}
     items.forEach(it => {
       if (!it.date) return noDate.push(it)
-      if (it.date < DASH_START) return before.push(it)
-      const k = it.date.slice(0, 7)
-      ;(byMonth[k] ||= []).push(it)
+      ;(byMonth[it.date.slice(0, 7)] ||= []).push(it)
     })
-    const sortByDate = arr => arr.sort((a, b) => a.date.localeCompare(b.date) || a.o.name.localeCompare(b.o.name))
-    sortByDate(before)
-    Object.values(byMonth).forEach(sortByDate)
+    Object.values(byMonth).forEach(arr =>
+      arr.sort((a, b) => a.date.localeCompare(b.date) || a.o.name.localeCompare(b.o.name))
+    )
 
-    // Todos os meses do início do dash até hoje, mesmo os vazios
+    const keys = Object.keys(byMonth).sort()
     const months = []
-    const now = new Date()
-    for (let d = new Date(2026, 2, 1); d <= now; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) {
-      const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-      months.push({ key: k, label: `${MONTHS[d.getMonth()]} ${d.getFullYear()}`, items: byMonth[k] || [] })
+    if (keys.length) {
+      const [fy, fm] = keys[0].split('-').map(Number)
+      const now = new Date()
+      for (let d = new Date(fy, fm - 1, 1); d <= now; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) {
+        const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+        months.push({ key: k, label: `${MONTHS[d.getMonth()]} ${d.getFullYear()}`, items: byMonth[k] || [] })
+      }
+      months.reverse()
     }
-    months.reverse()
 
-    return { before, months, noDate, uncertain: items.filter(it => !it.sure).length }
+    return { months, noDate }
   }, [items])
 
   return (
@@ -160,16 +158,13 @@ export default function OfferTimeline() {
             Timeline de ofertas
           </h2>
           <p className="text-xs text-gray-400 mt-0.5">
-            Mês a mês, pelo 1º dia de gasto na Meta · mais recente em cima
+            Mês a mês, pelo 1º dia de gasto · mais recente em cima
             {loading && ' · buscando datas nas planilhas…'}
           </p>
         </div>
-        <div className="text-[11px] text-right space-y-0.5">
-          {uncertain > 0 && (
-            <p className="text-amber-600">{uncertain} com data incerta (marcadas com ?)</p>
-          )}
-          {failed > 0 && <p className="text-red-500">{failed} planilhas não carregaram</p>}
-        </div>
+        {failed > 0 && (
+          <p className="text-[11px] text-red-500 text-right">{failed} planilhas não carregaram</p>
+        )}
       </div>
 
       {/* Legenda dos tipos */}
@@ -185,9 +180,6 @@ export default function OfferTimeline() {
       <div className="px-6 py-4">
         <ol className="relative border-l-2 border-gray-100 ml-2 space-y-5">
           {months.map(m => <MonthBlock key={m.key} label={m.label} items={m.items} />)}
-          {before.length > 0 && (
-            <MonthBlock label="Antes do dash" sublabel="começaram antes de 31/03/2026" items={before} showYear muted />
-          )}
           {noDate.length > 0 && (
             <MonthBlock label="Sem data" sublabel="sem gasto na Meta e sem data de início" items={noDate} muted />
           )}
