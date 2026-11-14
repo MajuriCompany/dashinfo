@@ -29,6 +29,9 @@ function periodStart(key) {
   return start
 }
 
+// Início da planilha de compradores (mesmo corte do sheetsService) — lucro só conta daqui pra frente
+const LUCRO_DESDE = new Date(2026, 2, 31)
+
 // Data de criação usada só neste filtro, quando difere da data de início (nome em minúsculas → YYYY-MM-DD)
 const CREATED_OVERRIDE = {
   'libido oculta': '2026-03-31',
@@ -88,10 +91,12 @@ export default function OfferClassificationDash() {
 
   // Mesmo carregamento e mesmo "Lucro Líq." da tela Todas as Ofertas (ofertas não pausadas)
   const { data: sheetData, loading } = useSheetData(trackedOffers, settings, apiKey, buyersApiKey)
+  // Só a partir de 31/03/2026: antes disso a planilha de compradores não é lida (só entra gasto, sem venda)
   const lucroById = useMemo(() => {
     const result = {}
     for (const [id, rows] of Object.entries(sheetData)) {
-      result[id] = calcMetrics(rows, settings.aliquota).lucro_liquido
+      const desde = rows.filter(r => r.date >= LUCRO_DESDE)
+      result[id] = calcMetrics(desde, settings.aliquota).lucro_liquido
     }
     return result
   }, [sheetData, settings.aliquota])
@@ -229,7 +234,9 @@ export default function OfferClassificationDash() {
                     <th className="text-left px-3 py-2 text-gray-500 font-semibold">Oferta</th>
                     {tipoFilter === 'all' && <th className="text-left px-3 py-2 text-gray-500 font-semibold">Tipo</th>}
                     <th className="text-left px-3 py-2 text-gray-500 font-semibold">Resultado</th>
-                    <th className="text-right px-3 py-2 text-gray-500 font-semibold">Lucro Líq.</th>
+                    <th className="text-right px-3 py-2 text-gray-500 font-semibold whitespace-nowrap" title="Lucro líquido desde 31/03/2026, início da planilha de compradores">
+                      Lucro Líq. <span className="font-normal text-gray-400">desde 31/03</span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
@@ -264,7 +271,7 @@ export default function OfferClassificationDash() {
                     </td>
                     <td className="px-3 py-2 text-right whitespace-nowrap">
                       {lucroLoading
-                        ? <span className="text-gray-300">…</span>
+                        ? <span className="text-gray-400 font-normal">carregando planilhas…</span>
                         : <span className={`tabular-nums font-semibold ${lucroTotal >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{fmt.brl(lucroTotal)}</span>}
                     </td>
                   </tr>
