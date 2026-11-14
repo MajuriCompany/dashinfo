@@ -2,10 +2,49 @@ import { useMemo, useState } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { PieChart as PieIcon } from 'lucide-react'
 import { useAppConfig } from '../hooks/useAppConfig'
+import { useSheetData } from '../hooks/useSheetData'
+import { useManualEntries } from '../hooks/useManualEntries'
+import { inRange } from '../utils/dateUtils'
+import { fmt } from '../utils/formatters'
 import { TIPO_OPTIONS, RESULTADO_OPTIONS, optionLabel } from '../config/offerClassification'
 
 function pct(n, total) {
   return total > 0 ? (n / total) * 100 : 0
+}
+
+// ── Filtro de período ─────────────────────────────────────────────────────────
+
+const PERIODS = [
+  { key: 'd30',   label: 'Últ. 30d',  days: 30 },
+  { key: 'd90',   label: 'Últ. 90d',  days: 90 },
+  { key: 'd180',  label: 'Últ. 180d', days: 180 },
+  { key: 'total', label: 'Período total' },
+]
+
+function periodRange(key) {
+  const p = PERIODS.find(x => x.key === key)
+  if (!p?.days) return null
+  const end   = new Date(); end.setHours(23, 59, 59, 999)
+  const start = new Date(); start.setHours(0, 0, 0, 0); start.setDate(start.getDate() - (p.days - 1))
+  return { start, end }
+}
+
+const normName = s => (s || '').trim().toLowerCase()
+
+// Lucro de entrada manual (compat: entradas antigas guardavam lucro direto)
+function manualLucro(e) {
+  const gasto = e.gasto ?? e.valorGasto ?? null
+  if (e.faturado != null && gasto != null) return e.faturado - gasto
+  return e.lucro ?? 0
+}
+
+function LucroValue({ value, className = '' }) {
+  if (value == null) return <span className="text-gray-300">—</span>
+  return (
+    <span className={`tabular-nums font-semibold ${value >= 0 ? 'text-emerald-600' : 'text-red-500'} ${className}`}>
+      {value > 0 ? '+' : ''}{fmt.brl(value)}
+    </span>
+  )
 }
 
 // Conta quantas ofertas caem em cada opção; % sobre as que têm a opção preenchida
@@ -47,8 +86,58 @@ function DistributionChart({ data }) {
 }
 
 export default function OfferClassificationDash() {
-  const { offers } = useAppConfig()
+  const { offers: allOffers, settings, apiKey, buyersApiKey } = useAppConfig()
+  const { entries: manualEntries } = useManualEntries()
   const [tipoFilter, setTipoFilter] = useState('all')
+  const [period, setPeriod] = useState('total')
+
+  // Todas as ofertas com planilha (inclusive pausadas) — o lucro vem de lá
+  const sheetOffers = useMemo(
+    () => allOffers.filter(o => (o.resultSheetId && o.resultTab) || (o.metaSheetId && o.metaTab)),
+    [allOffers]
+  )
+  const { data: sheetData, loading } = useSheetData(sheetOffers, settings, apiKey, buyersApiKey)
+
+  const range = useMemo(() => periodRange(period), [period])
+
+  // Lucro por oferta no período: planilha (lucro líquido) + entradas manuais com o mesmo nome
+  const lucroById = useMemo(() => {
+    const result = {}
+    allOffers.forEach(o => {
+      let lucro = 0, active = false, hasData = false
+
+      const rows = sheetData[o.id]
+      if (rows) {
+        hasData = true
+        rows.forEach(r => {
+          if (range && !inRange(r.date, range.start, range.end)) return
+          lucro += r.lucro_liquido || 0
+          if (r.gasto || r.comissao) active = true
+        })
+      }
+
+      manualEntries.forEach(e => {
+        if (normName(e.offerName) !== normName(o.name)) return
+        hasData = true
+        if (range && !inRange(new Date(e.date + 'T12:00:00'), range.start, range.end)) return
+        lucro += manualLucro(e)
+        active = true
+      })
+
+      result[o.id] = { lucro: hasData ? lucro : null, active }
+    })
+    return result
+  }, [allOffers, sheetData, manualEntries, range])
+
+  // No filtro de período: só ofertas que rodaram (gasto/comissão) ou começaram no período
+  const offers = useMemo(() => {
+    if (!range) return allOffers
+    return allOffers.filter(o => {
+      if (lucroById[o.id]?.active) return true
+      const ref = o.startDate ? new Date(o.startDate + 'T12:00:00') : (o.createdAt ? new Date(o.createdAt) : null)
+      return ref ? inRange(ref, range.start, range.end) : false
+    })
+  }, [allOffers, lucroById, range])
 
   const semTipo      = offers.filter(o => !o.tipo).length
   const semResultado = offers.filter(o => !o.resultado).length
@@ -68,24 +157,54 @@ export default function OfferClassificationDash() {
     return [...offersInTipo].sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name))
   }, [offersInTipo])
 
+  const lucroTotal = offerList.reduce((s, o) => s + (lucroById[o.id]?.lucro ?? 0), 0)
+  const lucroLoading = loading && Object.keys(sheetData).length === 0
+  const periodLabel = PERIODS.find(p => p.key === period)?.label
+
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+      <div className="flex items-start justify-between gap-4 px-6 py-4 border-b border-gray-100 flex-wrap">
         <div>
           <h2 className="font-semibold text-gray-800 flex items-center gap-2">
             <PieIcon className="w-4 h-4 text-gray-500" />
             Agregado de ofertas
           </h2>
           <p className="text-xs text-gray-400 mt-0.5">
-            {offers.length} ofertas cadastradas · classifique em Configurações → editar oferta
+            {range
+              ? `${offers.length} de ${allOffers.length} ofertas rodaram no período`
+              : `${allOffers.length} ofertas cadastradas`}
+            {' '}· classifique em Configurações → editar oferta
           </p>
+          <div className="flex flex-wrap items-center gap-1.5 mt-3">
+            {PERIODS.map(p => (
+              <button
+                key={p.key}
+                onClick={() => setPeriod(p.key)}
+                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                  period === p.key ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
         </div>
-        {(semTipo > 0 || semResultado > 0) && (
-          <p className="text-[11px] text-amber-600 text-right">
-            {semTipo > 0 && <span className="block">{semTipo} sem tipo</span>}
-            {semResultado > 0 && <span className="block">{semResultado} sem resultado</span>}
-          </p>
-        )}
+        <div className="flex items-start gap-4">
+          {(semTipo > 0 || semResultado > 0) && (
+            <p className="text-[11px] text-amber-600 text-right">
+              {semTipo > 0 && <span className="block">{semTipo} sem tipo</span>}
+              {semResultado > 0 && <span className="block">{semResultado} sem resultado</span>}
+            </p>
+          )}
+          <div className="text-right">
+            <p className="text-[10px] uppercase tracking-wide text-gray-400">
+              Lucro · {tipoFilter === 'all' ? 'todos os tipos' : optionLabel(TIPO_OPTIONS, tipoFilter)} · {periodLabel}
+            </p>
+            <p className="text-lg mt-0.5">
+              {lucroLoading ? <span className="text-gray-300 text-sm">carregando…</span> : <LucroValue value={lucroTotal} />}
+            </p>
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 p-6">
@@ -132,6 +251,7 @@ export default function OfferClassificationDash() {
                     <th className="text-left px-3 py-2 text-gray-500 font-semibold">Oferta</th>
                     {tipoFilter === 'all' && <th className="text-left px-3 py-2 text-gray-500 font-semibold">Tipo</th>}
                     <th className="text-left px-3 py-2 text-gray-500 font-semibold">Resultado</th>
+                    <th className="text-right px-3 py-2 text-gray-500 font-semibold">Lucro</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
@@ -154,10 +274,23 @@ export default function OfferClassificationDash() {
                             </span>
                           ) : <span className="text-gray-300">sem resultado</span>}
                         </td>
+                        <td className="px-3 py-1.5 text-right whitespace-nowrap">
+                          {lucroLoading ? <span className="text-gray-300">…</span> : <LucroValue value={lucroById[o.id]?.lucro} />}
+                        </td>
                       </tr>
                     )
                   })}
                 </tbody>
+                <tfoot className="bg-gray-50 border-t border-gray-100">
+                  <tr>
+                    <td colSpan={tipoFilter === 'all' ? 3 : 2} className="px-3 py-2 text-gray-500 font-semibold">
+                      Total · {offerList.length} {offerList.length === 1 ? 'oferta' : 'ofertas'}
+                    </td>
+                    <td className="px-3 py-2 text-right whitespace-nowrap">
+                      {lucroLoading ? <span className="text-gray-300">…</span> : <LucroValue value={lucroTotal} />}
+                    </td>
+                  </tr>
+                </tfoot>
               </table>
             </div>
           )}
