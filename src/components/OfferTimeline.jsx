@@ -14,6 +14,11 @@ const CONFIRMED_START = {
   'libido oculta':            '2026-03-10',
 }
 
+// Ofertas que não estão cadastradas no dash, mas entram na timeline (data = 1º gasto na planilha geral)
+const EXTRA_OFFERS = [
+  { id: 'extra_simpatia', name: 'Simpatia', date: '2025-12-04' },
+]
+
 const CACHE_KEY = 'dash_offer_first_spend'
 const MONTHS = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
 
@@ -108,7 +113,12 @@ export default function OfferTimeline() {
       if (e.date && (!firstManual[k] || e.date < firstManual[k])) firstManual[k] = e.date
     })
 
-    return offers.map(o => {
+    const registered = new Set(offers.map(o => norm(o.name)))
+    const extras = EXTRA_OFFERS
+      .filter(e => !registered.has(norm(e.name)))
+      .map(e => ({ o: { id: e.id, name: e.name }, date: e.date, source: '1º gasto na planilha geral (não cadastrada no dash)', sure: true }))
+
+    return [...extras, ...offers.map(o => {
       const confirmed = CONFIRMED_START[norm(o.name)]
       if (confirmed) return { o, date: confirmed, source: 'confirmada', sure: true }
 
@@ -120,7 +130,7 @@ export default function OfferTimeline() {
       if (o.startDate) return { o, date: o.startDate, source: 'data de início (sem gasto na Meta)', sure: true }
       if (o.createdAt) return { o, date: ymd(new Date(o.createdAt)), source: 'data de cadastro (sem gasto na Meta)', sure: true }
       return { o, date: null, source: 'sem data', sure: false }
-    })
+    })]
   }, [offers, firstSpend, manualEntries])
 
   // Agrupa mês a mês, da 1ª oferta até hoje (mais recente em cima); sem nenhuma data vai pro fim
