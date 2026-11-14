@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, X, ClipboardList, Plus, Pencil, Trash2, Chec
 import { getISOWeek, getISOWeekYear, startOfISOWeek, addWeeks, addDays, format } from 'date-fns'
 import { useTaskData } from '../hooks/useTaskData'
 import OfferClassificationDash from '../components/OfferClassificationDash'
+import OfferTimeline from '../components/OfferTimeline'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -762,6 +763,9 @@ export default function Tarefas() {
 
       {/* Agregado de ofertas (tipo / resultado vindos de Configurações) */}
       <OfferClassificationDash />
+
+      {/* Timeline: quando cada oferta começou (1º gasto na Meta), mês a mês */}
+      <OfferTimeline />
 
       {modal && (
         <TaskModal
