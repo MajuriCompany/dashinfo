@@ -141,9 +141,8 @@ export default function OfferTimeline() {
       const now = new Date()
       for (let d = new Date(fy, fm - 1, 1); d <= now; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) {
         const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-        months.push({ key: k, label: `${MONTHS[d.getMonth()]} ${d.getFullYear()}`, items: byMonth[k] || [] })
+        months.push({ key: k, month: MONTHS[d.getMonth()], year: d.getFullYear(), items: byMonth[k] || [] })
       }
-      months.reverse()
     }
 
     return { months, noDate }
@@ -158,7 +157,7 @@ export default function OfferTimeline() {
             Timeline de ofertas
           </h2>
           <p className="text-xs text-gray-400 mt-0.5">
-            Mês a mês, pelo 1º dia de gasto · mais recente em cima
+            Mês a mês, pelo 1º dia de gasto
             {loading && ' · buscando datas nas planilhas…'}
           </p>
         </div>
@@ -171,86 +170,83 @@ export default function OfferTimeline() {
       <div className="flex flex-wrap gap-x-4 gap-y-1 px-6 pt-4">
         {TIPO_OPTIONS.map(t => (
           <span key={t.value} className="inline-flex items-center gap-1.5 text-[11px] text-gray-500">
-            <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: t.color }} />
+            <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: t.color }} />
             {t.label}
           </span>
         ))}
       </div>
 
-      <div className="px-6 py-4">
-        <ol className="relative border-l-2 border-gray-100 ml-2 space-y-5">
-          {months.map(m => <MonthBlock key={m.key} label={m.label} items={m.items} />)}
-          {noDate.length > 0 && (
-            <MonthBlock label="Sem data" sublabel="sem gasto na Meta e sem data de início" items={noDate} muted />
-          )}
-        </ol>
+      {/* Calendário: um mês do lado do outro, ofertas empilhadas dentro do mês */}
+      <div className="p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6 gap-3">
+        {months.map(m => <MonthCard key={m.key} title={m.month} subtitle={m.year} items={m.items} />)}
+        {noDate.length > 0 && <MonthCard title="Sem data" subtitle="sem gasto nem data de início" items={noDate} muted />}
       </div>
     </div>
   )
 }
 
-function MonthBlock({ label, sublabel, items, showYear = false, muted = false }) {
+function MonthCard({ title, subtitle, items, muted = false }) {
+  const empty = items.length === 0
   // Resumo por tipo no mês
   const counts = TIPO_OPTIONS
     .map(t => ({ ...t, n: items.filter(it => it.o.tipo === t.value).length }))
     .filter(t => t.n > 0)
 
   return (
-    <li className="ml-5">
-      <span className={`absolute -left-[7px] mt-1.5 w-3 h-3 rounded-full border-2 border-white ${items.length ? (muted ? 'bg-gray-400' : 'bg-blue-600') : 'bg-gray-200'}`} />
-      <div className="flex items-baseline gap-2 flex-wrap">
-        <p className={`text-sm font-semibold ${items.length ? 'text-gray-800' : 'text-gray-300'}`}>{label}</p>
-        <p className="text-[11px] text-gray-400">
-          {items.length} {items.length === 1 ? 'oferta' : 'ofertas'}
-          {sublabel && ` · ${sublabel}`}
-        </p>
+    <div className={`rounded-lg border flex flex-col ${empty ? 'border-dashed border-gray-200 bg-gray-50/50' : 'border-gray-200 bg-white'}`}>
+      <div className={`px-3 py-2 border-b ${empty ? 'border-dashed border-gray-200' : 'border-gray-100 bg-gray-50'} rounded-t-lg`}>
+        <div className="flex items-baseline justify-between gap-2">
+          <p className={`text-sm font-semibold ${empty ? 'text-gray-300' : muted ? 'text-gray-500' : 'text-gray-800'}`}>
+            {title} <span className="font-normal text-[11px] text-gray-400">{subtitle}</span>
+          </p>
+          <span className={`text-[11px] tabular-nums ${empty ? 'text-gray-300' : 'text-gray-500 font-semibold'}`}>
+            {items.length}
+          </span>
+        </div>
+        {/* Barrinha com a proporção dos tipos no mês */}
         {counts.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex h-1.5 rounded-full overflow-hidden mt-1.5" title={counts.map(t => `${t.n} ${t.label}`).join(' · ')}>
             {counts.map(t => (
-              <span key={t.value} className="text-[10px] font-semibold px-1.5 py-0.5 rounded" style={{ color: t.color, backgroundColor: t.color + '1a' }}>
-                {t.n} {t.label}
-              </span>
+              <span key={t.value} style={{ backgroundColor: t.color, flexGrow: t.n }} />
             ))}
           </div>
         )}
       </div>
 
-      {items.length > 0 && (
-        <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
-          {items.map(it => <OfferChip key={it.o.id} it={it} showYear={showYear} />)}
-        </div>
+      {empty ? (
+        <p className="px-3 py-3 text-[11px] text-gray-300 italic">nenhuma oferta</p>
+      ) : (
+        <ul className="p-2 space-y-1.5">
+          {items.map(it => <OfferRow key={it.o.id} it={it} />)}
+        </ul>
       )}
-    </li>
+    </div>
   )
 }
 
-function OfferChip({ it, showYear }) {
-  const { o, date, source, sure } = it
+function OfferRow({ it }) {
+  const { o, date, source } = it
   const tipo = TIPO_OPTIONS.find(t => t.value === o.tipo)
   const res  = RESULTADO_OPTIONS.find(r => r.value === o.resultado)
-  const dateLabel = date ? (showYear ? brDate(date) : brDate(date).slice(0, 5)) : '—'
 
   return (
-    <div
-      className="flex items-center gap-2 border border-gray-100 rounded-lg px-3 py-2 bg-white"
+    <li
+      className="rounded-md bg-white border border-gray-100 px-2.5 py-1.5"
       style={{ borderLeft: `3px solid ${tipo?.color || '#e5e7eb'}` }}
-      title={`Data: ${source}`}
+      title={`${o.name}
+Tipo: ${tipo?.label || 'sem tipo'}${res ? `
+Resultado: ${res.label}` : ''}
+Data: ${source}`}
     >
-      <span className={`text-[11px] tabular-nums shrink-0 w-[70px] ${sure ? 'text-gray-500' : 'text-amber-600 font-semibold'}`}>
-        {dateLabel}{!sure && ' ?'}
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="text-xs text-gray-800 truncate">{o.name}</p>
-        <p className="text-[10px] truncate" style={{ color: tipo?.color || '#9ca3af' }}>
-          {tipo?.label || 'sem tipo'}
-        </p>
+      <div className="flex items-start gap-1.5">
+        <span className="text-[10px] tabular-nums text-gray-400 shrink-0 mt-px">{date ? brDate(date).slice(0, 5) : '—'}</span>
+        <span className="text-xs text-gray-800 leading-tight break-words flex-1 min-w-0">{o.name}</span>
+        {res && <span className="w-2 h-2 rounded-full shrink-0 mt-1" style={{ backgroundColor: res.color }} />}
       </div>
-      {res && (
-        <span className="shrink-0 inline-flex items-center gap-1 text-[10px] font-medium" style={{ color: res.color }}>
-          <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: res.color }} />
-          {res.label}
-        </span>
-      )}
-    </div>
+      <p className="text-[10px] truncate mt-0.5" style={{ color: tipo?.color || '#9ca3af' }}>
+        {tipo?.label || 'sem tipo'}
+        {res && <span className="text-gray-400"> · {res.label}</span>}
+      </p>
+    </li>
   )
 }
