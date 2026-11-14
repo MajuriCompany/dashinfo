@@ -178,7 +178,11 @@ function resolveOffer(candidates, dateKey) {
     .sort((a, b) => a.lockedUntil.localeCompare(b.lockedUntil))
   if (locked.length) return locked[0]
   const open = candidates.filter(c => !c.lockedUntil)
-  return open[open.length - 1] || null  // mesma regra de antes: a última cadastrada vence
+  // Oferta pausada só fica com a venda se nenhuma oferta ativa/em teste usa o mesmo produto
+  // (igual ao resto do dash, que nem carrega as pausadas)
+  const notPaused = open.filter(c => !c.paused)
+  const pool = notPaused.length ? notPaused : open
+  return pool[pool.length - 1] || null  // mesma regra de antes: a última cadastrada vence
 }
 
 export async function fetchBuyersDataByOffer(buyersApiKey, offers) {
@@ -209,11 +213,12 @@ export async function fetchBuyersDataByOffer(buyersApiKey, offers) {
       ? offer.frontProduct
       : (offer.frontProduct ? offer.frontProduct.split(',').map(s => s.trim()).filter(Boolean) : [])
     const lockedUntil = offer.lockedUntil || null
+    const paused      = offer.status === 'paused'
     frontProducts.forEach(p => {
-      if (p) addProduct(p, { offerId: offer.id, isFront: true, lockedUntil })
+      if (p) addProduct(p, { offerId: offer.id, isFront: true, lockedUntil, paused })
     })
     ;(offer.otherProducts || []).forEach(p => {
-      if (p) addProduct(p, { offerId: offer.id, isFront: false, lockedUntil })
+      if (p) addProduct(p, { offerId: offer.id, isFront: false, lockedUntil, paused })
     })
   })
   console.log('[COMPRADORES] produtos mapeados:', Object.keys(productMap))

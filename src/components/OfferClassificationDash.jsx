@@ -38,6 +38,11 @@ function manualLucro(e) {
   return e.lucro ?? 0
 }
 
+// Data de criação usada SÓ neste filtro, quando difere da data de início da oferta (nome normalizado → YYYY-MM-DD)
+const CREATED_OVERRIDE = {
+  'libido oculta': '2026-03-31',
+}
+
 function LucroValue({ value, className = '' }) {
   if (value == null) {
     return (
@@ -49,6 +54,27 @@ function LucroValue({ value, className = '' }) {
   return (
     <span className={`tabular-nums font-semibold ${value >= 0 ? 'text-emerald-600' : 'text-red-500'} ${className}`}>
       {value > 0 ? '+' : ''}{fmt.brl(value)}
+    </span>
+  )
+}
+
+// Lucro da oferta + detalhe (comissão, gasto, imposto) no hover; avisa quando há venda sem gasto
+function OfferLucro({ info }) {
+  if (!info || info.lucro == null) return <LucroValue value={null} />
+  const semGasto = info.comissao > 0 && info.gasto === 0
+  const detail = [
+    `Comissão: ${fmt.brl(info.comissao)}`,
+    `Gasto: ${fmt.brl(info.gasto)}`,
+    `Imposto: ${fmt.brl(info.imposto)}`,
+    info.manual ? `Entradas manuais: ${fmt.brl(info.manual)}` : null,
+    semGasto ? 'Sem gasto nas planilhas: confira a planilha da Meta dessa oferta' : null,
+  ].filter(Boolean).join('\n')
+  return (
+    <span title={detail} className="inline-flex items-center gap-1.5 cursor-help">
+      {semGasto && (
+        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">sem gasto</span>
+      )}
+      <LucroValue value={info.lucro} />
     </span>
   )
 }
@@ -107,26 +133,34 @@ export default function OfferClassificationDash() {
   const lucroById = useMemo(() => {
     const result = {}
     allOffers.forEach(o => {
-      let lucro = 0, hasData = false
+      let lucro = 0, comissao = 0, gasto = 0, imposto = 0, manual = 0, hasData = false
 
       ;(sheetData[o.id] || []).forEach(r => {
         if (r.gasto || r.comissao || r.faturamento) hasData = true
-        lucro += r.lucro_liquido || 0
+        lucro    += r.lucro_liquido || 0
+        comissao += r.comissao      || 0
+        gasto    += r.gasto         || 0
+        imposto  += r.imposto       || 0
       })
 
       manualEntries.forEach(e => {
         if (normName(e.offerName) !== normName(o.name)) return
         hasData = true
-        lucro += manualLucro(e)
+        manual += manualLucro(e)
       })
+      lucro += manual
 
-      result[o.id] = { lucro: hasData ? lucro : null }
+      result[o.id] = { lucro: hasData ? lucro : null, comissao, gasto, imposto, manual }
     })
     return result
   }, [allOffers, sheetData, manualEntries])
 
   // Filtro de período = data de criação da oferta (data de início em Configurações; senão, data de cadastro)
-  const createdAt = o => o.startDate ? new Date(o.startDate + 'T12:00:00') : (o.createdAt ? new Date(o.createdAt) : null)
+  const createdAt = o => {
+    const override = CREATED_OVERRIDE[normName(o.name)]
+    if (override) return new Date(override + 'T12:00:00')
+    return o.startDate ? new Date(o.startDate + 'T12:00:00') : (o.createdAt ? new Date(o.createdAt) : null)
+  }
   const semData = useMemo(() => allOffers.filter(o => !createdAt(o)).length, [allOffers])
 
   const offers = useMemo(() => {
@@ -277,7 +311,7 @@ export default function OfferClassificationDash() {
                           ) : <span className="text-gray-300">sem resultado</span>}
                         </td>
                         <td className="px-3 py-1.5 text-right whitespace-nowrap">
-                          {lucroLoading ? <span className="text-gray-300">…</span> : <LucroValue value={lucroById[o.id]?.lucro} />}
+                          {lucroLoading ? <span className="text-gray-300">…</span> : <OfferLucro info={lucroById[o.id]} />}
                         </td>
                       </tr>
                     )
