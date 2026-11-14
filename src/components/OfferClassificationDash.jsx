@@ -2,6 +2,9 @@ import { useMemo, useState } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { PieChart as PieIcon } from 'lucide-react'
 import { useAppConfig } from '../hooks/useAppConfig'
+import { useSheetData } from '../hooks/useSheetData'
+import { calcMetrics } from '../utils/calculations'
+import { fmt } from '../utils/formatters'
 import { TIPO_OPTIONS, RESULTADO_OPTIONS, optionLabel } from '../config/offerClassification'
 
 function pct(n, total) {
@@ -79,9 +82,19 @@ function DistributionChart({ data }) {
 }
 
 export default function OfferClassificationDash() {
-  const { offers: allOffers } = useAppConfig()
+  const { offers: allOffers, settings, apiKey, buyersApiKey, trackedOffers } = useAppConfig()
   const [tipoFilter, setTipoFilter] = useState('all')
   const [period, setPeriod] = useState('total')
+
+  // Mesmo carregamento e mesmo "Lucro Líq." da tela Todas as Ofertas (ofertas não pausadas)
+  const { data: sheetData, loading } = useSheetData(trackedOffers, settings, apiKey, buyersApiKey)
+  const lucroById = useMemo(() => {
+    const result = {}
+    for (const [id, rows] of Object.entries(sheetData)) {
+      result[id] = calcMetrics(rows, settings.aliquota).lucro_liquido
+    }
+    return result
+  }, [sheetData, settings.aliquota])
 
   const start = useMemo(() => periodStart(period), [period])
   const semData = useMemo(() => allOffers.filter(o => !offerCreatedAt(o)).length, [allOffers])
@@ -112,6 +125,26 @@ export default function OfferClassificationDash() {
     const rank = o => { const i = RES_ORDER.indexOf(o.resultado); return i < 0 ? 99 : i }
     return [...offersInTipo].sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name))
   }, [offersInTipo])
+
+  const lucroTotal = offerList.reduce((s, o) => s + (lucroById[o.id] ?? 0), 0)
+  const lucroLoading = loading && Object.keys(sheetData).length === 0
+
+  function renderLucro(o) {
+    if (lucroLoading) return <span className="text-gray-300">…</span>
+    const v = lucroById[o.id]
+    if (v == null) {
+      return (
+        <span className="text-gray-300" title={o.status === 'paused' ? 'Oferta pausada: o dash não carrega os dados dela' : 'Sem dados'}>
+          —
+        </span>
+      )
+    }
+    return (
+      <span className={`tabular-nums font-semibold ${v >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+        {fmt.brl(v)}
+      </span>
+    )
+  }
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
@@ -196,6 +229,7 @@ export default function OfferClassificationDash() {
                     <th className="text-left px-3 py-2 text-gray-500 font-semibold">Oferta</th>
                     {tipoFilter === 'all' && <th className="text-left px-3 py-2 text-gray-500 font-semibold">Tipo</th>}
                     <th className="text-left px-3 py-2 text-gray-500 font-semibold">Resultado</th>
+                    <th className="text-right px-3 py-2 text-gray-500 font-semibold">Lucro Líq.</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
@@ -218,10 +252,23 @@ export default function OfferClassificationDash() {
                             </span>
                           ) : <span className="text-gray-300">sem resultado</span>}
                         </td>
+                        <td className="px-3 py-1.5 text-right whitespace-nowrap">{renderLucro(o)}</td>
                       </tr>
                     )
                   })}
                 </tbody>
+                <tfoot className="bg-gray-50 border-t border-gray-100">
+                  <tr>
+                    <td colSpan={tipoFilter === 'all' ? 3 : 2} className="px-3 py-2 text-gray-500 font-semibold">
+                      Total · {offerList.length} {offerList.length === 1 ? 'oferta' : 'ofertas'}
+                    </td>
+                    <td className="px-3 py-2 text-right whitespace-nowrap">
+                      {lucroLoading
+                        ? <span className="text-gray-300">…</span>
+                        : <span className={`tabular-nums font-semibold ${lucroTotal >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{fmt.brl(lucroTotal)}</span>}
+                    </td>
+                  </tr>
+                </tfoot>
               </table>
             </div>
           )}
