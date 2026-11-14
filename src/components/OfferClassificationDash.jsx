@@ -39,7 +39,13 @@ function manualLucro(e) {
 }
 
 function LucroValue({ value, className = '' }) {
-  if (value == null) return <span className="text-gray-300">—</span>
+  if (value == null) {
+    return (
+      <span className="text-gray-300" title="Sem gasto/venda nas planilhas e sem entrada manual com esse nome">
+        sem dados
+      </span>
+    )
+  }
   return (
     <span className={`tabular-nums font-semibold ${value >= 0 ? 'text-emerald-600' : 'text-red-500'} ${className}`}>
       {value > 0 ? '+' : ''}{fmt.brl(value)}
@@ -91,53 +97,45 @@ export default function OfferClassificationDash() {
   const [tipoFilter, setTipoFilter] = useState('all')
   const [period, setPeriod] = useState('total')
 
-  // Todas as ofertas com planilha (inclusive pausadas) — o lucro vem de lá
-  const sheetOffers = useMemo(
-    () => allOffers.filter(o => (o.resultSheetId && o.resultTab) || (o.metaSheetId && o.metaTab)),
-    [allOffers]
-  )
-  const { data: sheetData, loading } = useSheetData(sheetOffers, settings, apiKey, buyersApiKey)
+  // Todas as ofertas (inclusive pausadas): planilha de resultado/Meta + compradores (produtos).
+  // Busca 4 por vez pra não estourar a cota da API do Google Sheets.
+  const { data: sheetData, loading, error: sheetError } = useSheetData(allOffers, settings, apiKey, buyersApiKey, { concurrency: 4 })
 
   const range = useMemo(() => periodRange(period), [period])
 
-  // Lucro por oferta no período: planilha (lucro líquido) + entradas manuais com o mesmo nome
+  // Lucro (ou prejuízo) total de cada oferta: planilhas (lucro líquido) + entradas manuais com o mesmo nome
   const lucroById = useMemo(() => {
     const result = {}
     allOffers.forEach(o => {
-      let lucro = 0, active = false, hasData = false
+      let lucro = 0, hasData = false
 
-      const rows = sheetData[o.id]
-      if (rows) {
-        hasData = true
-        rows.forEach(r => {
-          if (range && !inRange(r.date, range.start, range.end)) return
-          lucro += r.lucro_liquido || 0
-          if (r.gasto || r.comissao) active = true
-        })
-      }
+      ;(sheetData[o.id] || []).forEach(r => {
+        if (r.gasto || r.comissao || r.faturamento) hasData = true
+        lucro += r.lucro_liquido || 0
+      })
 
       manualEntries.forEach(e => {
         if (normName(e.offerName) !== normName(o.name)) return
         hasData = true
-        if (range && !inRange(new Date(e.date + 'T12:00:00'), range.start, range.end)) return
         lucro += manualLucro(e)
-        active = true
       })
 
-      result[o.id] = { lucro: hasData ? lucro : null, active }
+      result[o.id] = { lucro: hasData ? lucro : null }
     })
     return result
-  }, [allOffers, sheetData, manualEntries, range])
+  }, [allOffers, sheetData, manualEntries])
 
-  // No filtro de período: só ofertas que rodaram (gasto/comissão) ou começaram no período
+  // Filtro de período = data de criação da oferta (data de início em Configurações; senão, data de cadastro)
+  const createdAt = o => o.startDate ? new Date(o.startDate + 'T12:00:00') : (o.createdAt ? new Date(o.createdAt) : null)
+  const semData = useMemo(() => allOffers.filter(o => !createdAt(o)).length, [allOffers])
+
   const offers = useMemo(() => {
     if (!range) return allOffers
     return allOffers.filter(o => {
-      if (lucroById[o.id]?.active) return true
-      const ref = o.startDate ? new Date(o.startDate + 'T12:00:00') : (o.createdAt ? new Date(o.createdAt) : null)
+      const ref = createdAt(o)
       return ref ? inRange(ref, range.start, range.end) : false
     })
-  }, [allOffers, lucroById, range])
+  }, [allOffers, range])
 
   const semTipo      = offers.filter(o => !o.tipo).length
   const semResultado = offers.filter(o => !o.resultado).length
@@ -171,7 +169,7 @@ export default function OfferClassificationDash() {
           </h2>
           <p className="text-xs text-gray-400 mt-0.5">
             {range
-              ? `${offers.length} de ${allOffers.length} ofertas rodaram no período`
+              ? `${offers.length} de ${allOffers.length} ofertas criadas no período`
               : `${allOffers.length} ofertas cadastradas`}
             {' '}· classifique em Configurações → editar oferta
           </p>
@@ -190,10 +188,14 @@ export default function OfferClassificationDash() {
           </div>
         </div>
         <div className="flex items-start gap-4">
-          {(semTipo > 0 || semResultado > 0) && (
-            <p className="text-[11px] text-amber-600 text-right">
+          {(semTipo > 0 || semResultado > 0 || (range && semData > 0) || sheetError) && (
+            <p className="text-[11px] text-amber-600 text-right max-w-[220px]">
               {semTipo > 0 && <span className="block">{semTipo} sem tipo</span>}
               {semResultado > 0 && <span className="block">{semResultado} sem resultado</span>}
+              {range && semData > 0 && (
+                <span className="block">{semData} sem data de início (fora do filtro) · defina em Configurações</span>
+              )}
+              {sheetError && <span className="block text-red-500">Erro ao carregar planilhas: {sheetError}</span>}
             </p>
           )}
           <div className="text-right">

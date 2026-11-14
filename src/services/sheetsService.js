@@ -339,13 +339,17 @@ export async function fetchOfferData(offer, apiKey, getRateForDate, buyersDataBy
     : null
 
   const [offerRows, metaRows, oldMetaRows] = await Promise.all([
-    fetchRange(offer.resultSheetId, `${offer.resultTab}!A:N`, apiKey)
-      .then(parseOfferResultRows)
-      .catch(e => { console.error(`[OFERTA] ${offer.name}:`, e.message); return [] }),
+    offer.resultSheetId && offer.resultTab
+      ? fetchRange(offer.resultSheetId, `${offer.resultTab}!A:N`, apiKey)
+          .then(parseOfferResultRows)
+          .catch(e => { console.error(`[OFERTA] ${offer.name}:`, e.message); return [] })
+      : Promise.resolve([]),
 
-    fetchRange(offer.metaSheetId, `${offer.metaTab}!A:Z`, apiKey)
-      .then(rows => parseMetaRows(rows, campaignFilter))
-      .catch(e => { console.error(`[META] ${offer.name}:`, e.message); return [] }),
+    offer.metaSheetId && offer.metaTab
+      ? fetchRange(offer.metaSheetId, `${offer.metaTab}!A:Z`, apiKey)
+          .then(rows => parseMetaRows(rows, campaignFilter))
+          .catch(e => { console.error(`[META] ${offer.name}:`, e.message); return [] })
+      : Promise.resolve([]),
 
     offer.oldMetaSheetId
       ? fetchRange(offer.oldMetaSheetId, `${offer.oldMetaTab || offer.metaTab}!A:Z`, apiKey)
@@ -373,7 +377,22 @@ export async function fetchOfferData(offer, apiKey, getRateForDate, buyersDataBy
 // ---------------------------------------------------------------------------
 // FETCH de todas as ofertas
 // ---------------------------------------------------------------------------
-export async function fetchAllOffersData(offers, apiKey, getRateForDate, buyersApiKey = '') {
+// Roda `fn` em cada item com no máximo `limit` ao mesmo tempo (evita estourar a cota da API do Sheets)
+async function allSettledLimited(items, limit, fn) {
+  const results = new Array(items.length)
+  let next = 0
+  async function worker() {
+    while (next < items.length) {
+      const i = next++
+      try { results[i] = { status: 'fulfilled', value: await fn(items[i]) } }
+      catch (reason) { results[i] = { status: 'rejected', reason } }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
+  return results
+}
+
+export async function fetchAllOffersData(offers, apiKey, getRateForDate, buyersApiKey = '', { concurrency = Infinity } = {}) {
   let buyersDataByOffer = {}
   let productRows = {}
   if (buyersApiKey) {
@@ -386,8 +405,10 @@ export async function fetchAllOffersData(offers, apiKey, getRateForDate, buyersA
     }
   }
 
-  const results = await Promise.allSettled(
-    offers.map(o => fetchOfferData(o, apiKey, getRateForDate, buyersDataByOffer))
+  const results = await allSettledLimited(
+    offers,
+    concurrency,
+    o => fetchOfferData(o, apiKey, getRateForDate, buyersDataByOffer)
   )
 
   const data = {}

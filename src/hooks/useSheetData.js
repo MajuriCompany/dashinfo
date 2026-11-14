@@ -3,7 +3,7 @@ import { fetchAllOffersData, invalidateCache } from '../services/sheetsService'
 import { fetchAndCacheRates, makeGetRate } from '../services/exchangeRateService'
 import { enrichRow } from '../utils/calculations'
 
-export function useSheetData(offers, settings, apiKey, buyersApiKey = '') {
+export function useSheetData(offers, settings, apiKey, buyersApiKey = '', { concurrency = Infinity } = {}) {
   const [data, setData]               = useState({})
   const [productRows, setProductRows] = useState({})
   const [loading, setLoading]         = useState(false)
@@ -19,7 +19,7 @@ export function useSheetData(offers, settings, apiKey, buyersApiKey = '') {
       const ratesMap       = await fetchAndCacheRates()
       const getRateForDate = makeGetRate(ratesMap, settings.usdRate)
 
-      const { data: raw, productRows: pRows } = await fetchAllOffersData(offers, apiKey, getRateForDate, buyersApiKey)
+      const { data: raw, productRows: pRows } = await fetchAllOffersData(offers, apiKey, getRateForDate, buyersApiKey, { concurrency })
       const enriched = {}
       for (const [id, rows] of Object.entries(raw)) {
         enriched[id] = rows.map(r => enrichRow(r, settings.aliquota))
@@ -31,7 +31,7 @@ export function useSheetData(offers, settings, apiKey, buyersApiKey = '') {
     } finally {
       setLoading(false)
     }
-  }, [offers, settings.usdRate, settings.aliquota, apiKey, buyersApiKey])
+  }, [offers, settings.usdRate, settings.aliquota, apiKey, buyersApiKey, concurrency])
 
   useEffect(() => {
     load(true)
