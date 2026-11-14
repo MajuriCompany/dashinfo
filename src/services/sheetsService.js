@@ -178,11 +178,7 @@ function resolveOffer(candidates, dateKey) {
     .sort((a, b) => a.lockedUntil.localeCompare(b.lockedUntil))
   if (locked.length) return locked[0]
   const open = candidates.filter(c => !c.lockedUntil)
-  // Oferta pausada só fica com a venda se nenhuma oferta ativa/em teste usa o mesmo produto
-  // (igual ao resto do dash, que nem carrega as pausadas)
-  const notPaused = open.filter(c => !c.paused)
-  const pool = notPaused.length ? notPaused : open
-  return pool[pool.length - 1] || null  // mesma regra de antes: a última cadastrada vence
+  return open[open.length - 1] || null  // mesma regra de antes: a última cadastrada vence
 }
 
 export async function fetchBuyersDataByOffer(buyersApiKey, offers) {
@@ -213,12 +209,11 @@ export async function fetchBuyersDataByOffer(buyersApiKey, offers) {
       ? offer.frontProduct
       : (offer.frontProduct ? offer.frontProduct.split(',').map(s => s.trim()).filter(Boolean) : [])
     const lockedUntil = offer.lockedUntil || null
-    const paused      = offer.status === 'paused'
     frontProducts.forEach(p => {
-      if (p) addProduct(p, { offerId: offer.id, isFront: true, lockedUntil, paused })
+      if (p) addProduct(p, { offerId: offer.id, isFront: true, lockedUntil })
     })
     ;(offer.otherProducts || []).forEach(p => {
-      if (p) addProduct(p, { offerId: offer.id, isFront: false, lockedUntil, paused })
+      if (p) addProduct(p, { offerId: offer.id, isFront: false, lockedUntil })
     })
   })
   console.log('[COMPRADORES] produtos mapeados:', Object.keys(productMap))
@@ -344,17 +339,13 @@ export async function fetchOfferData(offer, apiKey, getRateForDate, buyersDataBy
     : null
 
   const [offerRows, metaRows, oldMetaRows] = await Promise.all([
-    offer.resultSheetId && offer.resultTab
-      ? fetchRange(offer.resultSheetId, `${offer.resultTab}!A:N`, apiKey)
-          .then(parseOfferResultRows)
-          .catch(e => { console.error(`[OFERTA] ${offer.name}:`, e.message); return [] })
-      : Promise.resolve([]),
+    fetchRange(offer.resultSheetId, `${offer.resultTab}!A:N`, apiKey)
+      .then(parseOfferResultRows)
+      .catch(e => { console.error(`[OFERTA] ${offer.name}:`, e.message); return [] }),
 
-    offer.metaSheetId && offer.metaTab
-      ? fetchRange(offer.metaSheetId, `${offer.metaTab}!A:Z`, apiKey)
-          .then(rows => parseMetaRows(rows, campaignFilter))
-          .catch(e => { console.error(`[META] ${offer.name}:`, e.message); return [] })
-      : Promise.resolve([]),
+    fetchRange(offer.metaSheetId, `${offer.metaTab}!A:Z`, apiKey)
+      .then(rows => parseMetaRows(rows, campaignFilter))
+      .catch(e => { console.error(`[META] ${offer.name}:`, e.message); return [] }),
 
     offer.oldMetaSheetId
       ? fetchRange(offer.oldMetaSheetId, `${offer.oldMetaTab || offer.metaTab}!A:Z`, apiKey)
@@ -382,22 +373,7 @@ export async function fetchOfferData(offer, apiKey, getRateForDate, buyersDataBy
 // ---------------------------------------------------------------------------
 // FETCH de todas as ofertas
 // ---------------------------------------------------------------------------
-// Roda `fn` em cada item com no máximo `limit` ao mesmo tempo (evita estourar a cota da API do Sheets)
-async function allSettledLimited(items, limit, fn) {
-  const results = new Array(items.length)
-  let next = 0
-  async function worker() {
-    while (next < items.length) {
-      const i = next++
-      try { results[i] = { status: 'fulfilled', value: await fn(items[i]) } }
-      catch (reason) { results[i] = { status: 'rejected', reason } }
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
-  return results
-}
-
-export async function fetchAllOffersData(offers, apiKey, getRateForDate, buyersApiKey = '', { concurrency = Infinity } = {}) {
+export async function fetchAllOffersData(offers, apiKey, getRateForDate, buyersApiKey = '') {
   let buyersDataByOffer = {}
   let productRows = {}
   if (buyersApiKey) {
@@ -410,10 +386,8 @@ export async function fetchAllOffersData(offers, apiKey, getRateForDate, buyersA
     }
   }
 
-  const results = await allSettledLimited(
-    offers,
-    concurrency,
-    o => fetchOfferData(o, apiKey, getRateForDate, buyersDataByOffer)
+  const results = await Promise.allSettled(
+    offers.map(o => fetchOfferData(o, apiKey, getRateForDate, buyersDataByOffer))
   )
 
   const data = {}
