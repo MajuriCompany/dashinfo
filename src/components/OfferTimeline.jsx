@@ -233,7 +233,7 @@ function ResumoLinha({ s }) {
   if (s.semRes > 0) parts.push(<span key="sem" className="text-gray-400">{s.semRes} sem resultado</span>)
   return (
     <li className="text-xs leading-snug text-gray-800">
-      <span className="font-semibold">{s.n} {s.label}</span>
+      <span className="font-semibold">{s.n} - {s.label}</span>
       {parts.length > 0 && (
         <span className="text-gray-400">
           {' ('}
@@ -364,26 +364,11 @@ function PeriodSummary({ items }) {
             <p className="text-xs font-semibold text-gray-500 mb-2">Ofertas do período</p>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-6 gap-y-3">
               {linhas.map(s => (
-                <div key={s.t.value}>
-                  <p className="text-xs font-semibold text-gray-800 mb-0.5">{s.t.label} <span className="font-normal text-gray-400">({s.n})</span></p>
-                  <ul>
-                    {doPeriodo
-                      .filter(it => (it.o.tipo || '') === s.t.value)
-                      .sort((a, b) => RES_RANK(a) - RES_RANK(b) || a.o.name.localeCompare(b.o.name))
-                      .map(it => {
-                        const res = RES_INFO[it.o.resultado]
-                        return (
-                          <li key={it.o.id} className="text-xs leading-snug py-0.5" title={`Começou em ${brDate(it.date)}`}>
-                            <span className="text-gray-900">{it.o.name}</span>
-                            <span className="text-gray-300"> - </span>
-                            {res
-                              ? <span className="font-medium" style={{ color: res.color }}>{res.label}</span>
-                              : <span className="text-gray-400">sem resultado</span>}
-                          </li>
-                        )
-                      })}
-                  </ul>
-                </div>
+                <TipoGroup
+                  key={s.t.value}
+                  label={`${s.t.label} (${s.n})`}
+                  items={doPeriodo.filter(it => (it.o.tipo || '') === s.t.value)}
+                />
               ))}
             </div>
           </div>
@@ -423,32 +408,42 @@ function MonthCard({ title, subtitle, items }) {
       {empty ? (
         <p className="px-4 py-3 text-[11px] text-gray-300 italic">nenhuma oferta</p>
       ) : (
-        <ul className="p-2 space-y-0.5">
-          {items.map(it => <OfferRow key={it.o.id} it={it} />)}
-        </ul>
+        <div className="px-4 py-3 space-y-3">
+          {resumo.map(s => <TipoGroup key={s.t.value} label={s.t.label} items={items.filter(it => (it.o.tipo || '') === s.t.value)} />)}
+        </div>
       )}
     </div>
   )
 }
 
-// "100% escrito - Libido Oculta 1.0 - Deu médio"
-function OfferRow({ it }) {
-  const { o, date, source } = it
-  const tipo = TIPO_OPTIONS.find(t => t.value === o.tipo)
-  const res  = RES_INFO[o.resultado]
-
+// Tipo centralizado e, embaixo, "• Oferta - Resultado"
+function TipoGroup({ label, items }) {
+  const sorted = [...items].sort((a, b) => RES_RANK(a) - RES_RANK(b) || a.o.name.localeCompare(b.o.name))
   return (
-    <li
-      className="rounded-md px-2.5 py-1.5 text-xs leading-snug hover:bg-gray-50"
-      title={`Começou em ${date ? brDate(date) : '—'} · data: ${source}`}
-    >
-      <span className="text-gray-500">{tipo?.label || 'Sem tipo'}</span>
-      <span className="text-gray-300"> - </span>
-      <span className="text-gray-900 font-medium">{o.name}</span>
-      <span className="text-gray-300"> - </span>
-      {res
-        ? <span className="font-medium" style={{ color: res.color }}>{res.label}</span>
-        : <span className="text-gray-400">sem resultado</span>}
-    </li>
+    <div>
+      <div className="flex items-center gap-2 mb-1">
+        <span className="flex-1 h-px bg-gray-100" />
+        <span className="text-[11px] font-semibold text-gray-500">{label}</span>
+        <span className="flex-1 h-px bg-gray-100" />
+      </div>
+      <ul className="list-disc pl-5 space-y-0.5 marker:text-gray-300">
+        {sorted.map(it => {
+          const res = RES_INFO[it.o.resultado]
+          return (
+            <li
+              key={it.o.id}
+              className="text-xs leading-snug"
+              title={`Começou em ${it.date ? brDate(it.date) : '—'} · data: ${it.source}`}
+            >
+              <span className="text-gray-900 font-medium">{it.o.name}</span>
+              <span className="text-gray-300"> - </span>
+              {res
+                ? <span className="font-medium" style={{ color: res.color }}>{res.label}</span>
+                : <span className="text-gray-400">sem resultado</span>}
+            </li>
+          )
+        })}
+      </ul>
+    </div>
   )
 }
