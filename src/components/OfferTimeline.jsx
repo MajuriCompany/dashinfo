@@ -357,10 +357,44 @@ function PeriodSummary({ items }) {
             </div>
           </div>
         )}
+
+        {/* Quais são as ofertas do período, agrupadas por tipo */}
+        {doPeriodo.length > 0 && (
+          <div className="border-t border-gray-100 p-4">
+            <p className="text-xs font-semibold text-gray-500 mb-2">Ofertas do período</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-6 gap-y-3">
+              {linhas.map(s => (
+                <div key={s.t.value}>
+                  <p className="text-xs font-semibold text-gray-800 mb-0.5">{s.t.label} <span className="font-normal text-gray-400">({s.n})</span></p>
+                  <ul>
+                    {doPeriodo
+                      .filter(it => (it.o.tipo || '') === s.t.value)
+                      .sort((a, b) => RES_RANK(a) - RES_RANK(b) || a.o.name.localeCompare(b.o.name))
+                      .map(it => {
+                        const res = RES_INFO[it.o.resultado]
+                        return (
+                          <li key={it.o.id} className="text-xs leading-snug py-0.5" title={`Começou em ${brDate(it.date)}`}>
+                            <span className="text-gray-900">{it.o.name}</span>
+                            <span className="text-gray-300"> - </span>
+                            {res
+                              ? <span className="font-medium" style={{ color: res.color }}>{res.label}</span>
+                              : <span className="text-gray-400">sem resultado</span>}
+                          </li>
+                        )
+                      })}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
 }
+
+// Ordem na lista: muito bom → bom → médio → ruim → sem resultado
+const RES_RANK = it => { const i = RES_ORDEM.indexOf(it.o.resultado); return i < 0 ? 99 : i }
 
 // ── Mês do calendário ────────────────────────────────────────────────────────
 
