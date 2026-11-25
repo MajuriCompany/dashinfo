@@ -22,13 +22,19 @@ const roiClass = roi =>
   roi >= 1 ? 'text-warning bg-warning-light border-warning' :
              'text-danger bg-danger-light border-danger'
 
-export default function Overview() {
-  const { settings, apiKey, buyersApiKey, activeOffers, trackedOffers } = useAppConfig()
+// testing = aba "Ofertas em teste": mesma tela, só com as ofertas de status "Em teste"
+export default function Overview({ testing = false }) {
+  const { settings, apiKey, buyersApiKey, activeOffers: mainOffers, trackedOffers } = useAppConfig()
+  const testingOffers = useMemo(() => trackedOffers.filter(o => o.status === 'testing'), [trackedOffers])
+  const activeOffers  = testing ? testingOffers : mainOffers // ofertas exibidas nesta aba
+  // Em teste: carrega ativas + em teste (só exibe as em teste), pra venda de produto
+  // reaproveitado ser atribuída igual às abas Todas Ofertas / Por Oferta
+  const loadedOffers  = testing ? trackedOffers : mainOffers
   const { getGoals } = useMonthlyGoals()
   const { entries: manualEntries, offerSettings: manualOfferSettings } = useManualEntries()
-  const { data, loading, error, refresh }               = useSheetData(activeOffers, settings, apiKey, buyersApiKey)
+  const { data, loading, error, refresh }               = useSheetData(loadedOffers, settings, apiKey, buyersApiKey)
   const { setRefreshFn }                                = useContext(RefreshContext)
-  const [range, setRange]             = useState(getPresetRange('mes_atual'))
+  const [range, setRange]             = useState(getPresetRange(testing ? 'last_14' : 'mes_atual'))
   const [todayRate, setTodayRate]     = useState(null)
   const [selectedIds, setSelectedIds] = useState(() => new Set(activeOffers.map(o => o.id)))
   const [dropOpen, setDropOpen]       = useState(false)
@@ -114,12 +120,13 @@ export default function Overview() {
 
   // Entradas manuais habilitadas para o dash, filtradas pelo período selecionado
   const includedManualEntries = useMemo(() => {
+    if (testing) return [] // entradas manuais do "Dash Geral" contam só na Visão Geral
     return manualEntries.filter(e => {
       if (!manualOfferSettings[e.offerName]?.includeInDash) return false
       const d = new Date(e.date + 'T12:00:00')
       return inRange(d, range.start, range.end)
     })
-  }, [manualEntries, manualOfferSettings, range])
+  }, [manualEntries, manualOfferSettings, range, testing])
 
   const manualTotals = useMemo(() => {
     return includedManualEntries.reduce(
@@ -179,7 +186,13 @@ export default function Overview() {
   const { piso: metaPiso, stretch: metaStretch } = getGoals(mesKey, settings.metaPiso, settings.metaStretch)
 
   if (!apiKey) return <NoApiKey />
-  if (loading && !allRows.length) return <Spinner />
+  if (testing && activeOffers.length === 0) return (
+    <div className="space-y-2">
+      <h2 className="text-xl font-bold text-gray-900">Ofertas em teste</h2>
+      <p className="text-sm text-gray-400">Nenhuma oferta com status "Em teste". Defina em Configurações → editar oferta.</p>
+    </div>
+  )
+  if (loading && (testing ? !Object.keys(data).length : !allRows.length)) return <Spinner />
   if (error) return <ErrorState message={error} />
 
   const effectiveRate = todayRate ?? settings.usdRate
@@ -191,10 +204,12 @@ export default function Overview() {
       {/* ── Header ── */}
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="text-xl font-bold text-gray-900">Visão Geral</h2>
+          <h2 className="text-xl font-bold text-gray-900">{testing ? 'Ofertas em teste' : 'Visão Geral'}</h2>
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-            <p className="text-xs text-gray-400">Resultado consolidado · todas as ofertas</p>
-            {(coelhoCount > 0 || jnTesteCount > 0) && (
+            <p className="text-xs text-gray-400">
+              {testing ? 'Resultado consolidado · só ofertas em teste' : 'Resultado consolidado · todas as ofertas'}
+            </p>
+            {!testing && (coelhoCount > 0 || jnTesteCount > 0) && (
               <span className="flex items-center gap-1.5">
                 <span className="text-[10px] text-gray-400">novas este mês:</span>
                 {coelhoCount > 0 && (
@@ -315,13 +330,15 @@ export default function Overview() {
         </div>
       </div>
 
-      {/* ── Progresso da Meta ── */}
-      <GoalProgressBar
-        current={monthLucroLiq}
-        piso={metaPiso}
-        stretch={metaStretch}
-        dailyAvg={dailyRows.length > 0 ? metrics.lucro_liquido / dailyRows.length : null}
-      />
+      {/* ── Progresso da Meta (só na Visão Geral) ── */}
+      {!testing && (
+        <GoalProgressBar
+          current={monthLucroLiq}
+          piso={metaPiso}
+          stretch={metaStretch}
+          dailyAvg={dailyRows.length > 0 ? metrics.lucro_liquido / dailyRows.length : null}
+        />
+      )}
 
       {/* ── Gráficos ── */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">

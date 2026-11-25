@@ -26,7 +26,9 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route element={<Layout onLogout={logout} />}>
-          <Route path="/" element={<Overview />} />
+          {/* key diferente: sem isso o React reaproveita a tela e mistura filtros/dados entre as duas abas */}
+          <Route path="/" element={<Overview key="main" />} />
+          <Route path="/em-teste" element={<Overview key="testing" testing />} />
           <Route path="/ofertas" element={<OffersOverview />} />
           <Route path="/oferta" element={<OfferDetail />} />
           <Route path="/config" element={<Settings />} />
